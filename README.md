@@ -18,11 +18,11 @@ Validare i parametri ricevuti da `argparse` prima di effettuare qualsiasi chiama
 
 **Controlli da effettuare**
 
-- [ ] Verificare che `categoria` esista nel dizionario delle categorie.
-- [ ] Verificare che `data_inizio_str` sia nel formato corretto (`datetime.strptime`).
-- [ ] Verificare che `data_fine_str` sia nel formato corretto.
-- [ ] Controllare che `data_inizio < data_fine`.
-- [ ] Controllare che `data_fine` non sia successiva alla data odierna.
+- [x] Verificare che `categoria` esista nel dizionario delle categorie.
+- [x] Verificare che `data_inizio_str` sia nel formato corretto (`datetime.strptime`).
+- [x] Verificare che `data_fine_str` sia nel formato corretto.
+- [x] Controllare che `data_inizio < data_fine`.
+- [x] Controllare che `data_fine` non sia successiva alla data odierna.
 
 **Output**
 
