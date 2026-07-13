@@ -56,6 +56,21 @@ def mese_successivo(anno, mese):
     
     return nuovo_anno, nuovo_mese
 
+def genera_mesi(data_inizio_str, data_fine_str):
+    data_inizio = datetime.strptime(data_inizio_str, FORMATO_DATA)
+    data_fine = datetime.strptime(data_fine_str, FORMATO_DATA)
+
+    anno_corrente = data_inizio.year
+    mese_corrente = data_inizio.month
+
+    mesi = []
+    
+    while (anno_corrente, mese_corrente) <= (data_fine.year, data_fine.month):
+        mesi.append((anno_corrente, mese_corrente))
+        anno_corrente, mese_corrente = mese_successivo(anno_corrente, mese_corrente)
+    
+    return mesi
+
 def main():
 
     # Dizionario con le chiavi di ogni categoria da scaricare

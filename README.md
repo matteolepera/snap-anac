@@ -64,9 +64,9 @@ Generare tutte le coppie `(anno, mese)` comprese nell'intervallo richiesto.
 
 **Test**
 
-- [ ] Intero anno → 12 tuple.
-- [ ] Un solo mese → 1 tupla.
-- [ ] Novembre 2025 → Febbraio 2026 → 4 tuple.
+- [x] Intero anno → 12 tuple.
+- [x] Un solo mese → 1 tupla.
+- [x] Novembre 2025 → Febbraio 2026 → 4 tuple.
 
 ---
 
