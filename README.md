@@ -84,7 +84,7 @@ dati/bandi/2025/2025-01.json
 
 **Test**
 
-- [ ] Il mese deve essere sempre formattato con due cifre (`01`, `02`, ...).
+- [x] Il mese deve essere sempre formattato con due cifre (`01`, `02`, ...).
 
 ---
 

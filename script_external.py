@@ -1,6 +1,7 @@
 print("########## AVVIO SCRIPT ##########")
 import argparse
 from datetime import datetime
+from pathlib import Path
 
 FORMATO_DATA = "%d/%m/%Y"
 FORMATO_DATA_DESC = "gg/mm/aaaa"
@@ -70,6 +71,21 @@ def genera_mesi(data_inizio_str, data_fine_str):
         anno_corrente, mese_corrente = mese_successivo(anno_corrente, mese_corrente)
     
     return mesi
+
+def costruisci_percorso(categoria, anno, mese):
+    # Formatta il mese inserendo uno zero iniziale se ha una sola cifra (es. 1 -> '01')
+    mese_formattato = f"{mese:02d}"
+
+    # Crea il nome del file (es. "2025-01.json")
+    nome_file = f"{anno}-{mese_formattato}.json"
+
+    # Costruisce il percorso combinando le cartelle usando l'operatore / di pathlib
+    percorso = Path("dati") / categoria / str(anno) / nome_file
+
+    return percorso
+
+
+
 
 def main():
 
