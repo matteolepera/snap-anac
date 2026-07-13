@@ -96,12 +96,12 @@ def main():
     categorie = {
     "bandi": {
         "bandi": "4",
-        "avvisi di indizione": "2"
+        "avvisi_di_indizione": "2"
     },
     "esiti": {
         "risultati": "7",
-        "affidamenti diretti sotto soglia": "8a",
-        "preavvisi di aggiudicazione diretta": "9"
+        "affidamenti_diretti_sotto soglia": "8a",
+        "preavvisi_di_aggiudicazione_diretta": "9"
     }
   }
 
