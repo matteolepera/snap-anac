@@ -28,7 +28,6 @@ def _analizza_data(data_str, nome_campo):
             f"La data di {nome_campo} deve essere nel formato {FORMATO_DATA_DESC}."
         )
 
-
 def valida_parametri(data_inizio_str, data_fine_str, categoria_utente, struttura_categorie):
     # Funzione che valida i parametri ricevuti da argparse.   
     # Controllo e conversione delle date
@@ -64,7 +63,6 @@ def valida_parametri(data_inizio_str, data_fine_str, categoria_utente, struttura
 
     return data_inizio, data_fine, macro_categoria, id_categoria
 
-
 def genera_periodi(data_inizio, data_fine, granularita_mesi=1):
     periodi = []
     inizio_corrente = data_inizio
@@ -84,7 +82,6 @@ def genera_periodi(data_inizio, data_fine, granularita_mesi=1):
         inizio_corrente = fine_corrente + timedelta(days=1)
         
     return periodi
-
 
 def costruisci_percorso(macro_categoria, data_inizio, data_fine):
     anno_cartella = data_inizio.year
@@ -125,11 +122,11 @@ def chiamata_con_retry(url, headers=None, params=None, max_tentativi=5, backoff_
 def ottieni_totale_elementi(url_base, id_categoria, data_inizio, data_fine, headers):
     # Funzione sonda per prelevare il totale degli elementi
     params = {
-        "idCategoria": id_categoria,
         "dataPubblicazioneStart": data_inizio.strftime("%d/%m/%Y"),
         "dataPubblicazioneEnd": data_fine.strftime("%d/%m/%Y"),
         "page": 0,
-        "size": 1
+        "size": 1,
+        "codiceScheda": id_categoria
     }
     risposta = chiamata_con_retry(url_base, headers=headers, params=params)
     if not risposta:
@@ -139,6 +136,23 @@ def ottieni_totale_elementi(url_base, id_categoria, data_inizio, data_fine, head
         return int(risposta.json().get("totalElements", 0))
     except Exception:
         return None
+
+def scarica_pagina(url_base, id_categoria, data_inizio, data_fine, pagina, dimensione_pagina, headers):
+    params = {
+        "dataPubblicazioneStart": data_inizio.strftime("%d/%m/%Y"),
+        "dataPubblicazioneEnd": data_fine.strftime("%d/%m/%Y"),
+        "page": pagina,
+        "size": dimensione_pagina,
+        "codiceScheda": id_categoria
+    }
+    risposta = chiamata_con_retry(url_base, headers=headers, params=params)
+    return risposta.json() if risposta else None
+
+def salva_file_json(dati, percorso_file):
+    # Crea le cartelle necessarie e scrive i dati preservando i caratteri speciali
+    percorso_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(percorso_file, "w", encoding="utf-8") as f:
+        json.dump(dati, f, ensure_ascii=False, indent=4)
 
 def main():
     # Dizionario con le chiavi di ogni categoria da scaricare
