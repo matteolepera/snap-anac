@@ -44,6 +44,18 @@ def valida_parametri(data_inizio_str, data_fine_str, categoria, categorie):
 
     return data_inizio, data_fine
 
+def mese_successivo(anno, mese):
+    if mese == 12:
+        # caso limite: dicembre -> gennaio dell'anno dopo
+        nuovo_anno = anno + 1
+        nuovo_mese = 1
+    else:
+        # caso normale: incremento semplice
+        nuovo_anno = anno
+        nuovo_mese = mese + 1
+    
+    return nuovo_anno, nuovo_mese
+
 def main():
 
     # Dizionario con le chiavi di ogni categoria da scaricare

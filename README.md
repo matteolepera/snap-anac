@@ -47,8 +47,8 @@ Restituire anno e mese successivi.
 
 **Test**
 
-- [ ] Marzo → Aprile.
-- [ ] Dicembre → Gennaio dell'anno successivo.
+- [x] Marzo → Aprile.
+- [x] Dicembre → Gennaio dell'anno successivo.
 
 ---
 
