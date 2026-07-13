@@ -1,9 +1,11 @@
+print("########## AVVIO SCRIPT ##########")
+import argparse
 from datetime import datetime
 
 FORMATO_DATA = "%d/%m/%Y"
 FORMATO_DATA_DESC = "gg/mm/aaaa"
 
-
+# Funzione con_ sarebbe funzione privata
 def _analizza_data(data_str, nome_campo):
     try:
         return datetime.strptime(data_str, FORMATO_DATA).date()
@@ -40,4 +42,31 @@ def valida_parametri(data_inizio_str, data_fine_str, categoria, categorie):
             f"Categorie disponibili: {', '.join(categorie.keys())}"
         )
 
-return data_inizio, data_fine
+    return data_inizio, data_fine
+
+def main():
+
+    # Dizionario con le chiavi di ogni categoria da scaricare
+    categorie = {
+    "bandi": "4",
+    "avvisi": "2",
+    }
+
+    # Argomenti da passare allo script
+    parser = argparse.ArgumentParser(description="test srt")
+    parser.add_argument("--data-inizio", type=str, required=True)
+    parser.add_argument("--data-fine", type=str, required=True)
+    parser.add_argument("--categoria", type=str, required=True)
+    args = parser.parse_args()
+
+    try:
+        data_inizio, data_fine = valida_parametri(
+            args.data_inizio, args.data_fine, args.categoria, categorie
+        )
+        print(f"Parametri validi: {data_inizio} → {data_fine}, categoria={args.categoria}")
+    except ValueError as errore:
+        print(f"Errore nei parametri: {errore}")
+
+# Controllo per far capire a python se questo file deve essere esguito immediatamente o deve importarsi in un altro script.
+if __name__ == "__main__":
+    main()

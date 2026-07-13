@@ -26,16 +26,16 @@ Validare i parametri ricevuti da `argparse` prima di effettuare qualsiasi chiama
 
 **Output**
 
-- [ ] Restituire `True` oppure
-- [ ] Sollevare un'eccezione con un messaggio d'errore chiaro (consigliato).
+- [x] Restituire `True` oppure
+- [x] Sollevare un'eccezione con un messaggio d'errore chiaro (consigliato).
 
 **Test**
 
-- [ ] Parametri validi.
-- [ ] Categoria inesistente.
-- [ ] Data con formato errato.
-- [ ] Data iniziale successiva alla data finale.
-- [ ] Data finale nel futuro.
+- [x] Parametri validi.
+- [x] Categoria inesistente.
+- [x] Data con formato errato.
+- [x] Data iniziale successiva alla data finale.
+- [x] Data finale nel futuro.
 
 ---
 
