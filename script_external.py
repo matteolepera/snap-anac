@@ -1,6 +1,7 @@
 print("########## AVVIO SCRIPT ##########")
 import argparse
-from datetime import datetime
+from datetime import date, timedelta
+from dateutil.relativedelta import relativedelta
 from pathlib import Path
 
 FORMATO_DATA = "%d/%m/%Y"
@@ -45,32 +46,26 @@ def valida_parametri(data_inizio_str, data_fine_str, categoria, categorie):
 
     return data_inizio, data_fine
 
-def mese_successivo(anno, mese):
-    if mese == 12:
-        # caso limite: dicembre -> gennaio dell'anno dopo
-        nuovo_anno = anno + 1
-        nuovo_mese = 1
-    else:
-        # caso normale: incremento semplice
-        nuovo_anno = anno
-        nuovo_mese = mese + 1
+def genera_periodi(data_inizio, data_fine, granularita_mesi=1):
+    periodi = []
+    inizio_corrente = data_inizio
     
-    return nuovo_anno, nuovo_mese
+    while inizio_corrente <= data_fine:
+        # Aggiungiamo N mesi e togliamo un giorno per trovare la fine del blocco
+        fine_teorica = inizio_corrente + relativedelta(months=granularita_mesi) - timedelta(days=1)
+        
+        # Applichiamo i nostri due limiti di sicurezza
+        fine_corrente = min(fine_teorica, data_fine)
+        fine_anno = date(inizio_corrente.year, 12, 31)
+        fine_corrente = min(fine_corrente, fine_anno)
+        
+        periodi.append((inizio_corrente, fine_corrente))
+        
+        # Il giorno successivo diventa l'inizio del nuovo blocco
+        inizio_corrente = fine_corrente + timedelta(days=1)
+        
+    return periodi
 
-def genera_mesi(data_inizio_str, data_fine_str):
-    data_inizio = datetime.strptime(data_inizio_str, FORMATO_DATA)
-    data_fine = datetime.strptime(data_fine_str, FORMATO_DATA)
-
-    anno_corrente = data_inizio.year
-    mese_corrente = data_inizio.month
-
-    mesi = []
-    
-    while (anno_corrente, mese_corrente) <= (data_fine.year, data_fine.month):
-        mesi.append((anno_corrente, mese_corrente))
-        anno_corrente, mese_corrente = mese_successivo(anno_corrente, mese_corrente)
-    
-    return mesi
 
 def costruisci_percorso(categoria, anno, mese):
     # Formatta il mese inserendo uno zero iniziale se ha una sola cifra (es. 1 -> '01')
