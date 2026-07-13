@@ -3,9 +3,21 @@ import argparse
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from pathlib import Path
+import json
+import time
+import logging
+import requests
+
+
 
 FORMATO_DATA = "%d/%m/%Y"
 FORMATO_DATA_DESC = "gg/mm/aaaa"
+
+# Headers mi serve per fingermi affidabile, in questo caso googlebot
+headers_default = {
+    "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+}
+
 
 # Funzione con_ sarebbe funzione privata
 def _analizza_data(data_str, nome_campo):
@@ -88,8 +100,45 @@ def costruisci_percorso(macro_categoria, data_inizio, data_fine):
 
     return percorso
 
+def chiamata_con_retry(url, headers=None, params=None, max_tentativi=5, backoff_iniziale=2):
+    # Funzione che si occupa di fare una richiesta, se qualcosa va storto aspetta invece di far crashare tutto
+    backoff = backoff_iniziale
+    for tentativo in range(1, max_tentativi + 1):
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=15)
+            if response.status_code == 200:
+                return response
+            
+            if response.status_code in [429, 500, 502, 503, 504]:
+                print(f"    [AVVISO] HTTP {response.status_code} al tentativo {tentativo}. Pausa di {backoff}s...")
+            else:
+                response.raise_for_status() # Errori gravi (403, 404) bloccano subito
+                
+        except (requests.exceptions.RequestException, requests.exceptions.Timeout) as errore:
+            print(f"    [AVVISO] Errore di rete al tentativo {tentativo}: {errore}. Pausa di {backoff}s...")
+        
+        if tentativo < max_tentativi:
+            time.sleep(backoff)
+            backoff *= 2
+    return None
 
-
+def ottieni_totale_elementi(url_base, id_categoria, data_inizio, data_fine, headers):
+    # Funzione sonda per prelevare il totale degli elementi
+    params = {
+        "idCategoria": id_categoria,
+        "dataPubblicazioneStart": data_inizio.strftime("%d/%m/%Y"),
+        "dataPubblicazioneEnd": data_fine.strftime("%d/%m/%Y"),
+        "page": 0,
+        "size": 1
+    }
+    risposta = chiamata_con_retry(url_base, headers=headers, params=params)
+    if not risposta:
+        return None
+    try:
+        # Adatta "totalElements" se l'API reale usa un'altra chiave nel JSON
+        return int(risposta.json().get("totalElements", 0))
+    except Exception:
+        return None
 
 def main():
     # Dizionario con le chiavi di ogni categoria da scaricare
