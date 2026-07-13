@@ -1,6 +1,6 @@
 print("########## AVVIO SCRIPT ##########")
 import argparse
-from datetime import date, timedelta
+from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from pathlib import Path
 
@@ -17,34 +17,41 @@ def _analizza_data(data_str, nome_campo):
         )
 
 
-def valida_parametri(data_inizio_str, data_fine_str, categoria, categorie):
-    # Funzione che valida i parametri ricevuti da argparse.
-
-    # Controllo le date
+def valida_parametri(data_inizio_str, data_fine_str, categoria_utente, struttura_categorie):
+    # Funzione che valida i parametri ricevuti da argparse.   
+    # Controllo e conversione delle date
     data_inizio = _analizza_data(data_inizio_str, "inizio")
     data_fine = _analizza_data(data_fine_str, "fine")
 
-    # Controllo ordine cronoligco
     if data_inizio > data_fine:
         raise ValueError("La data di inizio non può essere successiva alla data di fine.")
 
-    # Controllo che la data finale non sia nel futuro
     oggi = datetime.today().date()
-
     if data_fine > oggi:
+        raise ValueError("La data di fine non può essere successiva alla data odierna.")
+
+    # Ricerca della sotto-categoria nel dizionario nidificato
+    macro_categoria = None
+    id_categoria = None
+
+    for macro, sotto_dizionario in struttura_categorie.items():
+        if categoria_utente in sotto_dizionario:
+            macro_categoria = macro
+            id_categoria = sotto_dizionario[categoria_utente]
+            break
+
+    # Se non troviamo l'ID, la categoria inserita dall'utente è errata
+    if not id_categoria:
+        tutte_disponibili = []
+        for sotto_dizionario in struttura_categorie.values():
+            tutte_disponibili.extend(sotto_dizionario.keys())
         raise ValueError(
-            "La data di fine non può essere successiva alla data odierna."
+            f"Categoria '{categoria_utente}' non valida.\n"
+            f"Opzioni disponibili: {', '.join(tutte_disponibili)}"
         )
 
+    return data_inizio, data_fine, macro_categoria, id_categoria
 
-    # Controllo categoria
-    if categoria not in categorie:
-        raise ValueError(
-            f"Categoria '{categoria}' non valida."
-            f"Categorie disponibili: {', '.join(categorie.keys())}"
-        )
-
-    return data_inizio, data_fine
 
 def genera_periodi(data_inizio, data_fine, granularita_mesi=1):
     periodi = []
@@ -67,15 +74,17 @@ def genera_periodi(data_inizio, data_fine, granularita_mesi=1):
     return periodi
 
 
-def costruisci_percorso(categoria, anno, mese):
-    # Formatta il mese inserendo uno zero iniziale se ha una sola cifra (es. 1 -> '01')
-    mese_formattato = f"{mese:02d}"
+def costruisci_percorso(macro_categoria, data_inizio, data_fine):
+    anno_cartella = data_inizio.year
 
-    # Crea il nome del file (es. "2025-01.json")
-    nome_file = f"{anno}-{mese_formattato}.json"
+    # Trasformiamo le date in stringhe pulite (formato ISO: AAAA-MM-GG)
+    str_inizio = data_inizio.strftime("%Y-%m-%d")
+    str_fine = data_fine.strftime("%Y-%m-%d")
+    
+    nome_file = f"{str_inizio}_{str_fine}.json"
 
-    # Costruisce il percorso combinando le cartelle usando l'operatore / di pathlib
-    percorso = Path("dati") / categoria / str(anno) / nome_file
+    # Costruisce il percorso finale
+    percorso = Path("dati") / macro_categoria / str(anno_cartella) / nome_file
 
     return percorso
 
@@ -83,27 +92,52 @@ def costruisci_percorso(categoria, anno, mese):
 
 
 def main():
-
     # Dizionario con le chiavi di ogni categoria da scaricare
     categorie = {
-    "bandi": "4",
-    "avvisi": "2",
+    "bandi": {
+        "bandi": "4",
+        "avvisi di indizione": "2"
+    },
+    "esiti": {
+        "risultati": "7",
+        "affidamenti diretti sotto soglia": "8a",
+        "preavvisi di aggiudicazione diretta": "9"
     }
+  }
 
     # Argomenti da passare allo script
-    parser = argparse.ArgumentParser(description="test srt")
-    parser.add_argument("--data-inizio", type=str, required=True)
-    parser.add_argument("--data-fine", type=str, required=True)
-    parser.add_argument("--categoria", type=str, required=True)
+    parser = argparse.ArgumentParser(description="Script per il download")
+    parser.add_argument("--data-inizio", type=str, required=True, help="Data inizio (gg/mm/aaaa)")
+    parser.add_argument("--data-fine", type=str, required=True, help="Data fine (gg/mm/aaaa)")
+    parser.add_argument("--categoria", type=str, required=True, help="Sotto-categoria da scaricare")
+    parser.add_argument("--granularita-mesi", type=int, default=1, help="Ampiezza di ogni blocco in mesi")
     args = parser.parse_args()
 
     try:
-        data_inizio, data_fine = valida_parametri(
+        # Validiamo i parametri ed estraiamo le informazioni sulla categoria nidificata
+        data_inizio, data_fine, macro_categoria, id_categoria = valida_parametri(
             args.data_inizio, args.data_fine, args.categoria, categorie
         )
-        print(f"Parametri validi: {data_inizio} → {data_fine}, categoria={args.categoria}")
+        
+        print(f"\n[INFO] Configurazione avviata correttamente:")
+        print(f"  - Sotto-categoria richiesta: '{args.categoria}' (ID API: {id_categoria})")
+        print(f"  - Salvataggio nella macro-cartella: dati/{macro_categoria}/")
+        print(f"  - Range temporale totale: {data_inizio} -> {data_fine}\n")
+        
+        # Generiamo la lista dei blocchi temporali da scaricare
+        periodi = genera_periodi(data_inizio, data_fine, args.granularita_mesi)
+        
+        print(f"--- Pianificazione Download ({len(periodi)} file previsti) ---")
+        for p_inizio, p_fine in periodi:
+            percorso_file = costruisci_percorso(macro_categoria, p_inizio, p_fine)
+            
+            # Qui si inserirà la logica della chiamata API usando id_categoria, p_inizio e p_fine
+            print(f"-> Download periodo: {p_inizio} al {p_fine}")
+            print(f"   Destinazione file: {percorso_file}\n")
+            
     except ValueError as errore:
         print(f"Errore nei parametri: {errore}")
+
 
 # Controllo per far capire a python se questo file deve essere esguito immediatamente o deve importarsi in un altro script.
 if __name__ == "__main__":

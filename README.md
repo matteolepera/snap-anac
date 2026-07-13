@@ -39,37 +39,6 @@ Validare i parametri ricevuti da `argparse` prima di effettuare qualsiasi chiama
 
 ---
 
-## ☐ 1.2 `mese_successivo(anno, mese)`
-
-**Scopo**
-
-Restituire anno e mese successivi.
-
-**Test**
-
-- [x] Marzo → Aprile.
-- [x] Dicembre → Gennaio dell'anno successivo.
-
----
-
-## ☐ 1.3 `genera_mesi(data_inizio_str, data_fine_str)`
-
-**Dipendenza**
-
-- Richiede `mese_successivo()`.
-
-**Scopo**
-
-Generare tutte le coppie `(anno, mese)` comprese nell'intervallo richiesto.
-
-**Test**
-
-- [x] Intero anno → 12 tuple.
-- [x] Un solo mese → 1 tupla.
-- [x] Novembre 2025 → Febbraio 2026 → 4 tuple.
-
----
-
 ## ☐ 1.4 `costruisci_percorso(categoria, anno, mese)`
 
 **Scopo**
