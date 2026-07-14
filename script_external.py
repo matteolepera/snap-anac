@@ -12,6 +12,8 @@ import random
 FORMATO_DATA = "%d/%m/%Y"
 FORMATO_DATA_DESC = "gg/mm/aaaa"
 
+CARTELLA_DOCUMENTI = Path.home() / "Documents"
+
 # Headers mi serve per fingermi affidabile, in questo caso googlebot
 headers_default = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -97,7 +99,7 @@ def genera_periodi(data_inizio, data_fine, granularita_mesi=1):
         
     return periodi
 
-def costruisci_percorso(macro_categoria, data_inizio, data_fine):
+def costruisci_percorso(macro_categoria, sotto_categoria, data_inizio, data_fine):
     anno_cartella = data_inizio.year
 
     # Trasformiamo le date in stringhe pulite (formato ISO: AAAA-MM-GG)
@@ -107,7 +109,7 @@ def costruisci_percorso(macro_categoria, data_inizio, data_fine):
     nome_file = f"{str_inizio}_{str_fine}.json"
 
     # Costruisce il percorso finale
-    percorso = Path("dati") / macro_categoria / str(anno_cartella) / nome_file
+    percorso = CARTELLA_DOCUMENTI / "dati" / macro_categoria / sotto_categoria / str(anno_cartella) / nome_file
 
     return percorso
 
