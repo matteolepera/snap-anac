@@ -5,7 +5,6 @@ from dateutil.relativedelta import relativedelta
 from pathlib import Path
 import json
 import time
-import logging
 import requests
 
 
@@ -153,7 +152,8 @@ def ottieni_totale_elementi(url_base, id_categoria, data_inizio, data_fine, head
         "codiceScheda": id_categoria
     }
     risposta = chiamata_con_retry(url_base, headers=headers, params=params)
-    if not risposta:
+    # Validazione esplicita: controlla che l'oggetto non sia None (evita ambiguità su response.ok)
+    if risposta is None:
         return None
     try:
         # Adatta "totalElements" se l'API reale usa un'altra chiave nel JSON
@@ -175,7 +175,8 @@ def scarica_pagina(url_base, id_categoria, data_inizio, data_fine, pagina, dimen
         "codiceScheda": id_categoria
     }
     risposta = chiamata_con_retry(url_base, headers=headers, params=params)
-    return risposta.json() if risposta else None
+    # Ritorna il dizionario JSON solo se l'oggetto risposta esiste esplicitamente
+    return risposta.json() if risposta is not None else None
 
 def salva_file_json(dati, percorso_file):
     # Crea le cartelle necessarie e scrive i dati preservando i caratteri speciali
@@ -274,9 +275,8 @@ def main():
                     
                     dati_pagina = scarica_pagina(URL_API, id_categoria, p_inizio, p_fine, pagina, args.dimensione_pagina, headers_default)
                     
-                    if not dati_pagina:
+                    if dati_pagina is None:
                         print(f"    [ERRORE GRAVE] Impossibile scaricare la pagina {pagina + 1}. Interrompo questo periodo.")
-                        errore_periodo = True
                         break
                     
                     # Se il server cambia struttura o restituisce None imprevisto, .get() evita il crash
