@@ -6,7 +6,7 @@ from pathlib import Path
 import json
 import time
 import requests
-
+import random
 
 
 FORMATO_DATA = "%d/%m/%Y"
@@ -205,6 +205,8 @@ def main():
     parser.add_argument("--categoria", type=str, required=True, help="Sotto-categoria da scaricare")
     parser.add_argument("--dimensione-pagina", type=int, default=5000, help="Numero di elementi da scaricare per pagina (default: 5000)")
     parser.add_argument("--granularita-mesi", type=int, default=1, help="Ampiezza di ogni blocco in mesi (default: 1)")
+    parser.add_argument("--attesa-pagine", type=float, default=4.0, help="Secondi di attesa tra pagine dello stesso periodo (default: 4.0)")
+    parser.add_argument("--attesa-periodi", type=float, default=8.0, help="Secondi di attesa tra un periodo e il successivo (default: 10.0)")
     args = parser.parse_args()
 
     try:
@@ -285,7 +287,7 @@ def main():
                     bandi_del_periodo.extend(lista_bandi)
                     
                     if pagina < (totale_pagine - 1):
-                        time.sleep(1.5)
+                        time.sleep(args.attesa_pagine)
 
                 # 6. Salvataggio su disco
                 if not errore_periodo:
@@ -297,7 +299,7 @@ def main():
                     statistiche["falliti"] += 1
                 
                 print(f"    Attesa di assestamento prima del prossimo periodo...\n")
-                time.sleep(3.0)
+                time.sleep(args.attesa_periodi + random.uniform(0, 1.5))
                 
             except Exception as errore_imprevisto:
                 # Lo scudo definitivo: cattura bug del codice, dischi pieni, JSON corrotti
