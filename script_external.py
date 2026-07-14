@@ -182,9 +182,14 @@ def scarica_pagina(url_base, id_categoria, data_inizio, data_fine, pagina, dimen
 
 def salva_file_json(dati, percorso_file):
     # Crea le cartelle necessarie e scrive i dati preservando i caratteri speciali
-    percorso_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(percorso_file, "w", encoding="utf-8") as f:
+      percorso_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    percorso_temporaneo = percorso_file.with_suffix(".json.tmp")
+    
+    with open(percorso_temporaneo, "w", encoding="utf-8") as f:
         json.dump(dati, f, ensure_ascii=False, indent=4)
+    
+    percorso_temporaneo.replace(percorso_file)
 
 def main():
     # Dizionario con le chiavi di ogni categoria da scaricare
