@@ -182,7 +182,7 @@ def scarica_pagina(url_base, id_categoria, data_inizio, data_fine, pagina, dimen
 
 def salva_file_json(dati, percorso_file):
     # Crea le cartelle necessarie e scrive i dati preservando i caratteri speciali
-      percorso_file.parent.mkdir(parents=True, exist_ok=True)
+    percorso_file.parent.mkdir(parents=True, exist_ok=True)
     
     percorso_temporaneo = percorso_file.with_suffix(".json.tmp")
     
@@ -289,9 +289,15 @@ def main():
                         errore_periodo = True
                         break
                     
-                    # Se il server cambia struttura o restituisce None imprevisto, .get() evita il crash
-                    lista_bandi = dati_pagina.get("content", []) if isinstance(dati_pagina, dict) else []
+                    # Verifica esplicita che la struttura attesa sia presente, invece di un fallback silenzioso
+                    if not isinstance(dati_pagina, dict) or "content" not in dati_pagina:
+                        print(f"    [ERRORE STRUTTURA] La risposta non contiene la chiave 'content' attesa. Interrompo questo periodo.")
+                        errore_periodo = True
+                        break
+
+                    lista_bandi = dati_pagina["content"]
                     bandi_del_periodo.extend(lista_bandi)
+                    
                     
                     if pagina < (totale_pagine - 1):
                         time.sleep(args.attesa_pagine)
