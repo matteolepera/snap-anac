@@ -268,7 +268,7 @@ def main():
                 
                 # 3. Gestione periodo vuoto
                 if totale_elementi == 0:
-                    print(f"    Nessun bando presente. Creo file vuoto di spunta.")
+                    print(f"    Nessun elemento presente. Creo file vuoto di spunta.")
                     salva_file_json([], percorso_file)
                     statistiche["completati"] += 1
                     continue

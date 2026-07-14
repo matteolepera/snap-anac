@@ -1,304 +1,168 @@
-FIRST SCRIPT
+# ANAC Public Tenders Downloader 🚀
 
-# Roadmap di sviluppo
+Questo strumento automatizza il download massivo dei dati relativi a bandi ed esiti di gara direttamente dalle API ufficiali di **ANAC (Autorità Nazionale Anticorruzione)**. 
 
-Questa checklist suddivide il progetto in tre fasi, partendo dalle funzioni indipendenti fino allo script principale. L'ordine suggerito permette di sviluppare e testare ogni componente prima di integrarlo con gli altri.
-
----
-
-# ✅ Fase 1 — Funzioni isolate (senza dipendenze)
-
-Queste funzioni possono essere implementate e testate singolarmente.
-
-## ☐ 1.1 `valida_parametri(data_inizio_str, data_fine_str, categoria)`
-
-**Scopo**
-
-Validare i parametri ricevuti da `argparse` prima di effettuare qualsiasi chiamata.
-
-**Controlli da effettuare**
-
-- [x] Verificare che `categoria` esista nel dizionario delle categorie.
-- [x] Verificare che `data_inizio_str` sia nel formato corretto (`datetime.strptime`).
-- [x] Verificare che `data_fine_str` sia nel formato corretto.
-- [x] Controllare che `data_inizio < data_fine`.
-- [x] Controllare che `data_fine` non sia successiva alla data odierna.
-
-**Output**
-
-- [x] Restituire `True` oppure
-- [x] Sollevare un'eccezione con un messaggio d'errore chiaro (consigliato).
-
-**Test**
-
-- [x] Parametri validi.
-- [x] Categoria inesistente.
-- [x] Data con formato errato.
-- [x] Data iniziale successiva alla data finale.
-- [x] Data finale nel futuro.
+Lo script è progettato con criteri di livello enterprise: gestisce la rete in modo resiliente (con retry e backoff esponenziale), evita la corruzione dei dati tramite salvataggi atomici temporanei, supporta il caching locale (skip dei file già scaricati) e riduce l'impatto sui server ANAC grazie a delay configurabili e jitter casuale.
 
 ---
 
-## ☐ 1.4 `costruisci_percorso(categoria, anno, mese)`
+## 📂 Struttura dell'Output Generato
 
-**Scopo**
-
-Costruire il percorso del file JSON senza creare nulla su disco.
-
-**Esempio**
+I file scaricati vengono organizzati automaticamente nella cartella `Documenti` dell'utente secondo una gerarchia logica e ordinata:
 
 ```text
-dati/bandi/2025/2025-01.json
+📁 Documents/
+└── 📁 dati/
+    ├── 📁 bandi_category/
+    │   ├── 📁 bandi/
+    │   │   └── 📁 2025/
+    │   │       └── 📄 2025-01-01_2025-01-31.json
+    │   └── 📁 avvisi_di_indizione/
+    └── 📁 esiti_category/
+        ├── 📁 risultati/
+        └── ...
 ```
 
-**Test**
+---
 
-- [x] Il mese deve essere sempre formattato con due cifre (`01`, `02`, ...).
+## 🎯 Stato di Avanzamento del Progetto
+
+Tutte le fasi di sviluppo sono state completate e integrate con successo. Lo script è pronto per l'uso in ambiente di produzione.
+
+## 🟢 Fase 1 — Utility, Validazione e Gestione File
+
+Componenti isolati per la sicurezza dei dati e la robustezza del codice.
+
+### ✅ 1.1 Analisi e Validazione Date (`_analizza_data`)
+
+- Parsing sicuro delle stringhe di data.
+- Gestione delle eccezioni in caso di formato non conforme.
+
+### ✅ 1.2 Validazione dei Parametri di Input (`valida_parametri`)
+
+- Controllo di sicurezza sulla dimensione massima della pagina (tetto di sicurezza a **5000 record**).
+- Verifica della corretta sequenzialità temporale:
+  - la data di inizio non può essere successiva alla data di fine;
+  - la data finale non può trovarsi nel futuro.
+- Controllo dell'esistenza della categoria rispetto al dizionario di configurazione ANAC.
+
+### ✅ 1.3 Generatore Dinamico dei Periodi (`genera_periodi`)
+
+- Suddivisione del range temporale in blocchi mensili configurabili.
+- Gestione automatica dei confini dell'anno solare (es. termine al **31/12**).
+
+### ✅ 1.4 Generazione Percorsi Standardizzata (`costruisci_percorso`)
+
+- Implementazione tramite `pathlib.Path`.
+- Compatibilità cross-platform:
+  - Windows
+  - macOS
+  - Linux
+
+### ✅ 1.5 Scrittura Atomica e Sicura (`salva_file_json`)
+
+- Creazione automatica delle cartelle mancanti.
+- Salvataggio mediante file temporaneo (`.json.tmp`).
+- Sovrascrittura atomica del file finale per evitare corruzioni in caso di crash improvvisi.
 
 ---
 
-## ☐ 1.5 `crea_cartelle_se_mancanti(percorso_file)`
+# 🟢 Fase 2 — Core Client & Logica di Rete (API ANAC)
 
-**Scopo**
+Integrazione con gli endpoint ministeriali e gestione proattiva degli errori di rete.
 
-Creare automaticamente la cartella destinazione se non esiste.
+### ✅ 2.1 Connessione Resiliente con Backoff Esponenziale (`chiamata_con_retry`)
 
-**Suggerimento**
+- Fino a **5 tentativi** automatici.
+- Gestione distinta degli errori:
+  - **HTTP 429** e **5xx** → nuovo tentativo con attesa raddoppiata.
+  - **HTTP 403** e **404** → interruzione immediata per evitare richieste inutili.
 
-Utilizzare:
+### ✅ 2.2 Chiamata Sonda di Controllo (`ottieni_totale_elementi`)
 
-```python
-os.path.dirname(percorso_file)
+- Richiesta preliminare con `size=1`.
+- Recupero del valore `totalElements` per conoscere il numero esatto dei record disponibili.
+
+### ✅ 2.3 Calcolo Dinamico delle Pagine (`calcola_numero_pagine`)
+
+- Calcolo matematico del numero di richieste necessarie in funzione della dimensione della pagina.
+
+### ✅ 2.4 Scaricamento della Singola Pagina (`scarica_pagina`)
+
+- Download parametrizzato dei dati.
+- Gestione sicura di:
+  - header HTTP;
+  - parametri di paginazione;
+  - sessione.
+
+---
+
+# 🟢 Fase 3 — Orchestrazione, CLI e Ciclo di Vita
+
+Il cuore dell'applicazione: coordinamento dei moduli in un flusso continuo ed efficiente.
+
+### ✅ 3.1 Interfaccia a Riga di Comando (`main` con `argparse`)
+
+Configurazione completa tramite terminale di:
+
+- intervallo temporale;
+- categoria;
+- granularità;
+- tempi di attesa;
+- dimensione delle pagine.
+
+### ✅ 3.2 Sistema di Caching Locale ("Smart Skip")
+
+- Riconoscimento automatico dei periodi già scaricati.
+- Ripresa dei download interrotti senza duplicare i dati.
+
+### ✅ 3.3 Isolamento dei Fallimenti dei Singoli Blocchi
+
+- Gli errori relativi a un singolo periodo vengono intercettati e registrati.
+- Lo script continua automaticamente con i periodi successivi.
+
+### ✅ 3.4 Algoritmo di Jittering Anti-Bot
+
+- Introduzione di una pausa casuale (`random.uniform`) al termine di ogni blocco.
+- Simulazione di un comportamento umano.
+- Riduzione del rischio di rate limiting o blocchi IP.
+
+### ✅ 3.5 Reportistica Finale
+
+Al termine dell'esecuzione viene mostrato un riepilogo contenente:
+
+- blocchi completati;
+- blocchi saltati;
+- blocchi falliti;
+- totale dei record salvati.
+
+---
+
+# 🛠️ Guida Rapida all'Uso
+
+Lo script è completamente configurabile da riga di comando.
+
+## Parametri disponibili
+
+| Parametro | Tipo | Default | Descrizione |
+|-----------|------|---------|-------------|
+| `--data-inizio` | `str` | **Richiesto** | Data iniziale nel formato `gg/mm/aaaa` |
+| `--data-fine` | `str` | **Richiesto** | Data finale nel formato `gg/mm/aaaa` |
+| `--categoria` | `str` | **Richiesto** | Categoria ANAC da scaricare (es. `bandi`, `risultati`, `affidamenti_diretti_sotto_soglia`) |
+| `--dimensione-pagina` | `int` | `5000` | Numero massimo di record per richiesta API |
+| `--granularita-mesi` | `int` | `1` | Numero di mesi inclusi in ogni file JSON |
+| `--attesa-pagine` | `float` | `4.0` | Secondi di attesa tra le pagine dello stesso periodo |
+| `--attesa-periodi` | `float` | `7.0` | Attesa base prima del periodo successivo |
+
+---
+
+## Esempio di utilizzo
+
+```bash
+python nome_script.py \
+  --data-inizio 01/01/2025 \
+  --data-fine 31/12/2025 \
+  --categoria bandi \
+  --granularita-mesi 1 \
+  --dimensione-pagina 1000
 ```
-
-per ottenere la directory.
-
-**Test**
-
-- [ ] Chiamata su cartella inesistente.
-- [ ] Chiamata ripetuta sulla stessa cartella (nessun errore).
-
----
-
-## ☐ 1.6 `file_mese_esiste(percorso_file)`
-
-**Scopo**
-
-Wrapper di `os.path.exists()`.
-
-**Test**
-
-- [ ] File esistente.
-- [ ] File inesistente.
-
----
-
-## ☐ 1.7 `salva_json(dati, percorso_file)`
-
-**Scopo**
-
-Salvare una lista o un dizionario in formato JSON.
-
-**Requisiti**
-
-- [ ] Encoding UTF-8.
-- [ ] Chiamare prima `crea_cartelle_se_mancanti()`.
-
-**Test**
-
-- [ ] Salvare una lista di esempio.
-- [ ] Verificare che il file venga creato e sia leggibile.
-
----
-
-## ☐ 1.8 `chiamata_con_retry(url, parametri, headers, tentativi_massimi, attesa_iniziale)`
-
-**Scopo**
-
-Effettuare una richiesta HTTP con retry e backoff esponenziale.
-
-**Test**
-
-- [ ] URL valido.
-- [ ] URL inesistente con retry visibili.
-
----
-
-# ✅ Fase 2 — Funzioni composte
-
-Queste funzioni utilizzano quelle sviluppate nella Fase 1.
-
----
-
-## ☐ 2.1 `ottieni_totale_elementi(url, categoria, anno, mese, headers)`
-
-**Scopo**
-
-Effettuare la chiamata "probe" (`size=1`) per conoscere il numero totale degli elementi del mese.
-
-**Attività**
-
-- [ ] Costruire le date di inizio e fine mese.
-- [ ] Calcolare l'ultimo giorno del mese.
-- [ ] Chiamare `chiamata_con_retry()`.
-- [ ] Restituire `totalElements`.
-- [ ] Restituire `None` in caso di fallimento.
-
-**Test**
-
-- [ ] Dicembre 2025 → atteso 3110 elementi.
-- [ ] Mese futuro o vuoto → 0 elementi.
-
----
-
-## ☐ 2.2 `calcola_numero_pagine(totale_elementi, dimensione_pagina)`
-
-**Scopo**
-
-Calcolare il numero di pagine necessarie.
-
-**Test**
-
-- [ ] Pochi elementi → 1 pagina.
-- [ ] Molti elementi → numero corretto di pagine.
-
----
-
-## ☐ 2.3 `scarica_pagina(url, categoria, anno, mese, numero_pagina, dimensione_pagina, headers)`
-
-**Scopo**
-
-Scaricare una singola pagina di risultati.
-
-**Output**
-
-- [ ] Restituire la lista `content`.
-
-**Test**
-
-- [ ] Dicembre 2025, pagina 0.
-- [ ] Verificare che `len(content)` sia coerente.
-
----
-
-## ☐ 2.4 `scarica_mese(url, categoria, anno, mese, dimensione_pagina, headers)`
-
-**Scopo**
-
-Funzione orchestratrice del download di un mese.
-
-**Flusso**
-
-- [ ] Chiamare `ottieni_totale_elementi()`.
-- [ ] Calcolare il numero di pagine.
-- [ ] Iterare su `scarica_pagina()`.
-- [ ] Accumulare tutti gli elementi.
-- [ ] Inserire `time.sleep()` tra le pagine quando necessario.
-
-**Output**
-
-- [ ] Lista completa degli elementi.
-- [ ] Gestione esplicita dei casi:
-  - [ ] `None`
-  - [ ] 0 elementi
-  - [ ] errore
-
-**Test**
-
-- [ ] Scaricare tutto dicembre 2025.
-
----
-
-# ✅ Fase 3 — Script principale
-
----
-
-## ☐ 3.1 `processa_mese(url, categoria, anno, mese, dimensione_pagina, headers)`
-
-**Scopo**
-
-Gestire il workflow completo di un singolo mese.
-
-**Flusso**
-
-- [ ] Verificare se il file esiste già.
-- [ ] Saltare il download se presente.
-- [ ] Scaricare il mese.
-- [ ] Salvare il JSON.
-- [ ] Scrivere il log.
-
-**Gestione casi particolari**
-
-- [ ] Zero elementi → salvare comunque una lista vuota.
-- [ ] Fallimento definitivo → loggare l'errore e continuare.
-
----
-
-## ☐ 3.2 `main()`
-
-**Scopo**
-
-Coordinare l'intero programma.
-
-**Attività**
-
-- [ ] Leggere gli argomenti da `argparse`.
-- [ ] Chiamare `valida_parametri()`.
-- [ ] Determinare le categorie da elaborare.
-- [ ] Gestire il caso `"entrambi"`.
-- [ ] Generare la lista dei mesi.
-- [ ] Eseguire il doppio ciclo:
-  - [ ] Categoria
-  - [ ] Mese
-- [ ] Chiamare `processa_mese()` per ogni combinazione.
-- [ ] Inserire una pausa (`time.sleep()`) tra un mese e il successivo.
-
-**Output finale**
-
-Stampare un riepilogo con:
-
-- [ ] Mesi processati.
-- [ ] Mesi saltati.
-- [ ] Mesi falliti.
-- [ ] Totale elementi scaricati.
-
----
-
-# 📋 Stato avanzamento
-
-## Fase 1
-
-- [ ] 1.1 Valida parametri
-- [ ] 1.2 Mese successivo
-- [ ] 1.3 Genera mesi
-- [ ] 1.4 Costruisci percorso
-- [ ] 1.5 Crea cartelle
-- [ ] 1.6 Verifica esistenza file
-- [ ] 1.7 Salva JSON
-- [ ] 1.8 Chiamata con retry
-
-## Fase 2
-
-- [ ] 2.1 Ottieni totale elementi
-- [ ] 2.2 Calcola numero pagine
-- [ ] 2.3 Scarica pagina
-- [ ] 2.4 Scarica mese
-
-## Fase 3
-
-- [ ] 3.1 Processa mese
-- [ ] 3.2 Main
-
----
-
-## 🎯 Obiettivo finale
-
-Al completamento di tutte le attività, lo script sarà in grado di:
-
-- validare gli input;
-- generare automaticamente i mesi da elaborare;
-- scaricare tutti i dati disponibili tramite API;
-- salvare ogni mese in un file JSON organizzato per categoria e anno;
-- riprendere l'esecuzione senza riscaricare i file già presenti;
-- gestire errori di rete tramite retry;
-- produrre un riepilogo finale dell'elaborazione.
