@@ -189,11 +189,11 @@ def salva_file_json(dati, percorso_file):
 def main():
     # Dizionario con le chiavi di ogni categoria da scaricare
     categorie = {
-    "bandi": {
+    "bandi_category": {
         "bandi": "4",
         "avvisi_di_indizione": "2"
     },
-    "esiti": {
+    "esiti_category": {
         "risultati": "7",
         "affidamenti_diretti_sotto_soglia": "8a",
         "preavvisi_di_aggiudicazione_diretta": "9"
@@ -208,7 +208,7 @@ def main():
     parser.add_argument("--dimensione-pagina", type=int, default=5000, help="Numero di elementi da scaricare per pagina (default: 5000)")
     parser.add_argument("--granularita-mesi", type=int, default=1, help="Ampiezza di ogni blocco in mesi (default: 1)")
     parser.add_argument("--attesa-pagine", type=float, default=4.0, help="Secondi di attesa tra pagine dello stesso periodo (default: 4.0)")
-    parser.add_argument("--attesa-periodi", type=float, default=8.0, help="Secondi di attesa tra un periodo e il successivo (default: 10.0)")
+    parser.add_argument("--attesa-periodi", type=float, default=7.0, help="Secondi di attesa tra un periodo e il successivo (default: 7.0)")
     args = parser.parse_args()
 
     try:
@@ -219,7 +219,7 @@ def main():
         
         print(f"\n[INFO] Configurazione avviata correttamente:")
         print(f"  - Sotto-categoria richiesta: '{args.categoria}' (ID API: {id_categoria})")
-        print(f"  - Salvataggio in: dati/{macro_categoria}/")
+        print(f"  - Salvataggio in: {CARTELLA_DOCUMENTI / 'dati' / macro_categoria / args.categoria}")
         print(f"  - Range temporale totale: {data_inizio} -> {data_fine}\n")
         
         periodi = genera_periodi(data_inizio, data_fine, args.granularita_mesi)
@@ -239,7 +239,7 @@ def main():
         print(f"--- Pianificazione Download ({statistiche['totale_periodi']} file previsti) ---")
         
         for p_inizio, p_fine in periodi:
-            percorso_file = costruisci_percorso(macro_categoria, p_inizio, p_fine)
+            percorso_file = costruisci_percorso(macro_categoria, args.categoria, p_inizio, p_fine)
             
             # Avvolgiamo il singolo periodo in un try/except dedicato per isolare i fallimenti
             try:
