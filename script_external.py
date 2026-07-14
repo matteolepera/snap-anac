@@ -277,6 +277,7 @@ def main():
                     
                     if dati_pagina is None:
                         print(f"    [ERRORE GRAVE] Impossibile scaricare la pagina {pagina + 1}. Interrompo questo periodo.")
+                        errore_periodo = True
                         break
                     
                     # Se il server cambia struttura o restituisce None imprevisto, .get() evita il crash
