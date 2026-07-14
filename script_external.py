@@ -15,7 +15,11 @@ FORMATO_DATA_DESC = "gg/mm/aaaa"
 
 # Headers mi serve per fingermi affidabile, in questo caso googlebot
 headers_default = {
-    "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Referer": "https://pubblicitalegale.anticorruzione.it/",
+    "Origin": "https://pubblicitalegale.anticorruzione.it"
 }
 
 
@@ -28,8 +32,19 @@ def _analizza_data(data_str, nome_campo):
             f"La data di {nome_campo} deve essere nel formato {FORMATO_DATA_DESC}."
         )
 
-def valida_parametri(data_inizio_str, data_fine_str, categoria_utente, struttura_categorie):
-    # Funzione che valida i parametri ricevuti da argparse.   
+def valida_parametri(data_inizio_str, data_fine_str, categoria_utente, struttura_categorie, dimensione_pagina):
+    # Funzione che valida i parametri ricevuti da argparse.
+    # Controllo valore e tetto massimo della dimensione pagina
+    if not isinstance(dimensione_pagina, int) or dimensione_pagina <= 0:
+        raise ValueError("La dimensione della pagina deve essere un numero intero positivo maggiore di 0.")
+    
+    TETTO_MASSIMO = 5000  # Limite provvisorio per i test
+    if dimensione_pagina > TETTO_MASSIMO:
+        raise ValueError(
+            f"La dimensione della pagina richiesta ({dimensione_pagina}) supera il tetto massimo "
+            f"prudenziale di {TETTO_MASSIMO}. Riduci il valore per evitare rifiuti dal server ANAC."
+        )
+
     # Controllo e conversione delle date
     data_inizio = _analizza_data(data_inizio_str, "inizio")
     data_fine = _analizza_data(data_fine_str, "fine")
@@ -103,20 +118,29 @@ def chiamata_con_retry(url, headers=None, params=None, max_tentativi=5, backoff_
     for tentativo in range(1, max_tentativi + 1):
         try:
             response = requests.get(url, headers=headers, params=params, timeout=15)
+            
+            # 1. CASO SUCCESSO: Tutto ok, restituisco la risposta
             if response.status_code == 200:
                 return response
             
+            # 2. CASO ERRORI TEMPORANEI: Il server è pigro o congestionato, ha senso riprovare
             if response.status_code in [429, 500, 502, 503, 504]:
                 print(f"    [AVVISO] HTTP {response.status_code} al tentativo {tentativo}. Pausa di {backoff}s...")
+            
+            # 3. CASO ERRORI DEFINITIVI (403, 404, ecc.): Errore client o blocco. Fermiamo subito il ciclo!
             else:
-                response.raise_for_status() # Errori gravi (403, 404) bloccano subito
+                print(f"    [ERRORE BLOCCANTE] HTTP {response.status_code} rilevato (Invalido o Negato). Inutile riprovare. Interrompo.")
+                return None
                 
         except (requests.exceptions.RequestException, requests.exceptions.Timeout) as errore:
-            print(f"    [AVVISO] Errore di rete al tentativo {tentativo}: {errore}. Pausa di {backoff}s...")
+            # Questo blocco ora scatterà SOLO per veri problemi di rete (timeout, DNS fallito, connessione persa)
+            print(f"    [AVVISO] Errore di rete/Timeout al tentativo {tentativo}: {errore}. Pausa di {backoff}s...")
         
+        # Gestione del backoff esponenziale (eseguito solo per il Caso 2 o per eccezioni nel blocco except)
         if tentativo < max_tentativi:
             time.sleep(backoff)
             backoff *= 2
+            
     return None
 
 def ottieni_totale_elementi(url_base, id_categoria, data_inizio, data_fine, headers):
@@ -136,6 +160,11 @@ def ottieni_totale_elementi(url_base, id_categoria, data_inizio, data_fine, head
         return int(risposta.json().get("totalElements", 0))
     except Exception:
         return None
+
+def calcola_numero_pagine(totale_elementi, dimensione_pagina):
+    if totale_elementi <= 0:
+        return 0
+    return (totale_elementi + dimensione_pagina - 1) // dimensione_pagina
 
 def scarica_pagina(url_base, id_categoria, data_inizio, data_fine, pagina, dimensione_pagina, headers):
     params = {
@@ -163,7 +192,7 @@ def main():
     },
     "esiti": {
         "risultati": "7",
-        "affidamenti_diretti_sotto soglia": "8a",
+        "affidamenti_diretti_sotto_soglia": "8a",
         "preavvisi_di_aggiudicazione_diretta": "9"
     }
   }
@@ -173,34 +202,122 @@ def main():
     parser.add_argument("--data-inizio", type=str, required=True, help="Data inizio (gg/mm/aaaa)")
     parser.add_argument("--data-fine", type=str, required=True, help="Data fine (gg/mm/aaaa)")
     parser.add_argument("--categoria", type=str, required=True, help="Sotto-categoria da scaricare")
-    parser.add_argument("--granularita-mesi", type=int, default=1, help="Ampiezza di ogni blocco in mesi")
+    parser.add_argument("--dimensione-pagina", type=int, default=5000, help="Numero di elementi da scaricare per pagina (default: 5000)")
+    parser.add_argument("--granularita-mesi", type=int, default=1, help="Ampiezza di ogni blocco in mesi (default: 1)")
     args = parser.parse_args()
 
     try:
-        # Validiamo i parametri ed estraiamo le informazioni sulla categoria nidificata
+        # Validiamo i parametri ed estraiamo le informazioni
         data_inizio, data_fine, macro_categoria, id_categoria = valida_parametri(
-            args.data_inizio, args.data_fine, args.categoria, categorie
+            args.data_inizio, args.data_fine, args.categoria, categorie, args.dimensione_pagina
         )
         
         print(f"\n[INFO] Configurazione avviata correttamente:")
         print(f"  - Sotto-categoria richiesta: '{args.categoria}' (ID API: {id_categoria})")
-        print(f"  - Salvataggio nella macro-cartella: dati/{macro_categoria}/")
+        print(f"  - Salvataggio in: dati/{macro_categoria}/")
         print(f"  - Range temporale totale: {data_inizio} -> {data_fine}\n")
         
-        # Generiamo la lista dei blocchi temporali da scaricare
         periodi = genera_periodi(data_inizio, data_fine, args.granularita_mesi)
         
-        print(f"--- Pianificazione Download ({len(periodi)} file previsti) ---")
+        # === CONFIGURAZIONE ENDPOINT ANAC ===
+        URL_API = "https://pubblicitalegale.anticorruzione.it/api/v0/avvisi"
+        
+        # === CONTATORI PER IL RIEPILOGO FINALE ===
+        statistiche = {
+            "totale_periodi": len(periodi),
+            "completati": 0,
+            "saltati": 0,
+            "falliti": 0,
+            "elementi_raccolti": 0
+        }
+        
+        print(f"--- Pianificazione Download ({statistiche['totale_periodi']} file previsti) ---")
+        
         for p_inizio, p_fine in periodi:
             percorso_file = costruisci_percorso(macro_categoria, p_inizio, p_fine)
             
-            # Qui si inserirà la logica della chiamata API usando id_categoria, p_inizio e p_fine
-            print(f"-> Download periodo: {p_inizio} al {p_fine}")
-            print(f"   Destinazione file: {percorso_file}\n")
+            # Avvolgiamo il singolo periodo in un try/except dedicato per isolare i fallimenti
+            try:
+                # 1. Controllo di esistenza (Skip)
+                if percorso_file.exists():
+                    print(f"[SKIP] Periodo {p_inizio.strftime('%d/%m/%Y')} -> {p_fine.strftime('%d/%m/%Y')} già scaricato.")
+                    statistiche["saltati"] += 1
+                    continue
+                    
+                print(f"-> Analisi periodo: {p_inizio.strftime('%d/%m/%Y')} al {p_fine.strftime('%d/%m/%Y')}")
+                
+                # 2. Chiamata sonda
+                totale_elementi = ottieni_totale_elementi(URL_API, id_categoria, p_inizio, p_fine, headers_default)
+                
+                if totale_elementi is None:
+                    print(f"    [ERRORE] Salto il periodo per fallimento della sonda di rete.")
+                    statistiche["falliti"] += 1
+                    continue
+                    
+                print(f"    Elementi totali rilevati sul server: {totale_elementi}")
+                
+                # 3. Gestione periodo vuoto
+                if totale_elementi == 0:
+                    print(f"    Nessun bando presente. Creo file vuoto di spunta.")
+                    salva_file_json([], percorso_file)
+                    statistiche["completati"] += 1
+                    continue
+
+                # 4. Calcolo delle pagine
+                totale_pagine = calcola_numero_pagine(totale_elementi, args.dimensione_pagina)
+                bandi_del_periodo = []
+                errore_periodo = False
+
+                # 5. Ciclo di scaricamento pagine
+                for pagina in range(0, totale_pagine):
+                    print(f"    Scarico pagina {pagina + 1}/{totale_pagine}...")
+                    
+                    dati_pagina = scarica_pagina(URL_API, id_categoria, p_inizio, p_fine, pagina, args.dimensione_pagina, headers_default)
+                    
+                    if not dati_pagina:
+                        print(f"    [ERRORE GRAVE] Impossibile scaricare la pagina {pagina + 1}. Interrompo questo periodo.")
+                        errore_periodo = True
+                        break
+                    
+                    # Se il server cambia struttura o restituisce None imprevisto, .get() evita il crash
+                    lista_bandi = dati_pagina.get("content", []) if isinstance(dati_pagina, dict) else []
+                    bandi_del_periodo.extend(lista_bandi)
+                    
+                    if pagina < (totale_pagine - 1):
+                        time.sleep(1.5)
+
+                # 6. Salvataggio su disco
+                if not errore_periodo:
+                    salva_file_json(bandi_del_periodo, percorso_file)
+                    print(f"    [OK] Blocco salvato con successo: {percorso_file.name}")
+                    statistiche["completati"] += 1
+                    statistiche["elementi_raccolti"] += len(bandi_del_periodo)
+                else:
+                    statistiche["falliti"] += 1
+                
+                print(f"    Attesa di assestamento prima del prossimo periodo...\n")
+                time.sleep(3.0)
+                
+            except Exception as errore_imprevisto:
+                # Lo scudo definitivo: cattura bug del codice, dischi pieni, JSON corrotti
+                print(f"    [CRASH EVITATO] Errore imprevisto nel periodo {p_inizio.strftime('%d/%m/%Y')}: {errore_imprevisto}")
+                print(f"    Procedo comunque con il prossimo blocco temporale...\n")
+                statistiche["falliti"] += 1
+                continue
+
+        # === FASE E: RIEPILOGO FINALE ===
+        print("=" * 50)
+        print("           ELABORAZIONE COMPLETATA")
+        print("=" * 50)
+        print(f" Periodi totali pianificati: {statistiche['totale_periodi']}")
+        print(f"   - Completati con successo: {statistiche['completati']}")
+        print(f"   - Saltati (già su disco):  {statistiche['saltati']}")
+        print(f"   - Falliti / Interrotti:    {statistiche['falliti']}")
+        print(f" Totale record ANAC raccolti: {statistiche['elementi_raccolti']}")
+        print("=" * 50)
             
     except ValueError as errore:
-        print(f"Errore nei parametri: {errore}")
-
+        print(f"Errore nei parametri iniziali: {errore}")
 
 # Controllo per far capire a python se questo file deve essere esguito immediatamente o deve importarsi in un altro script.
 if __name__ == "__main__":
