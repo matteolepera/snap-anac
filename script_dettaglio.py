@@ -53,6 +53,25 @@ def raccogli_tutti_gli_id(macro_categoria, sotto_categoria):
 
     return risultato
 
+def costruisci_percorso_dettaglio(
+    macro_categoria,
+    sotto_categoria,
+    anno,
+    periodo,
+    id_avviso,
+):
+    nome_file = f"{id_avviso}.json"
+
+    return (
+        CARTELLA_DOCUMENTI
+        / "dettagli"
+        / macro_categoria
+        / sotto_categoria
+        / anno
+        / periodo
+        / nome_file
+    )
+
 if __name__ == "__main__":
     risultati = raccogli_tutti_gli_id("bandi_category", "bandi")
     
@@ -65,3 +84,13 @@ if __name__ == "__main__":
     
     totale_id = sum(len(id_set) for _, id_set in risultati)
     print(f"\nTotale ID complessivi (con eventuali duplicati tra file): {totale_id}")
+
+    risultati = raccogli_tutti_gli_id("bandi_category", "bandi")
+    percorso_lista, id_set = risultati[0]   # il primo file trovato
+    un_id = next(iter(id_set))               # un ID qualsiasi da quel set, solo per test
+
+    anno = percorso_lista.parent.name
+    periodo = percorso_lista.stem
+    percorso_dettaglio = costruisci_percorso_dettaglio("bandi_category", "bandi", anno, periodo, un_id)
+
+    print(percorso_dettaglio)
