@@ -1,148 +1,61 @@
-# ANAC Public Tenders Downloader 🚀
+# ANAC SCRIPT 🚀
 
-Questo strumento automatizza il download massivo dei dati relativi a bandi ed esiti di gara direttamente dalle API ufficiali di **ANAC (Autorità Nazionale Anticorruzione)**. 
+Questo progetto è un tool di estrazione dati resiliente progettato per l'acquisizione massiva e l'archiviazione locale dei dati di gara dalle API ufficiali di ANAC (Autorità Nazionale Anticorruzione).
 
-Lo script è progettato con criteri di livello enterprise: gestisce la rete in modo resiliente (con retry e backoff esponenziale), evita la corruzione dei dati tramite salvataggi atomici temporanei, supporta il caching locale (skip dei file già scaricati) e riduce l'impatto sui server ANAC grazie a delay configurabili e jitter casuale.
+Il sistema è diviso in due fasi sequenziali:
 
----
+1. script_external.py (Download Indici): Scarica l'elenco dei metadati dei bandi/esiti per intervalli temporali e genera i file di indice.
+2. script_dettaglio.py (Download Dettagli): Legge gli indici scaricati, estrae gli ID univoci e scarica la scheda dettagliata di ogni singolo provvedimento.
 
-## 📂 Struttura dell'Output Generato
+```text
+[API ANAC] ──(1. Indici)──> script_external.py ──> 📁 dati/ (JSON Mensili)
+                                                         │ (Legge gli ID)
+                                                         ▼
+[API ANAC] ──(2. Schede)──> script_dettaglio.py <────────┘
+                                 │
+                                 ├──> 📁 dettagli/ (JSON Singoli)
+                                 └──> 📄 id_falliti.txt (Log Errori)
+```
 
-I file scaricati vengono organizzati automaticamente nella cartella `Documenti` dell'utente secondo una gerarchia logica e ordinata:
+
+## 🛠️ Requisiti e Setup
+
+Il progetto utilizza moduli standard di Python e la libreria requests per le chiamate HTTP.
+
+```bash
+  pip install requests python-dateutil
+```
+
+**Nota di portabilità:** I percorsi utilizzano pathlib.Path, garantendo la piena compatibilità cross-platform tra Windows (dove punta a C:\Users\Nome\Documents), macOS e Linux.
+
+## 📂 Architettura dei Dati
+
+La struttura delle cartelle viene creata dinamicamente all'interno della directory Documenti dell'utente:
 
 ```text
 📁 Documents/
-└── 📁 dati/
-    ├── 📁 bandi_category/
-    │   ├── 📁 bandi/
-    │   │   └── 📁 2025/
-    │   │       └── 📄 2025-01-01_2025-01-31.json
-    │   └── 📁 avvisi_di_indizione/
-    └── 📁 esiti_category/
-        ├── 📁 risultati/
-        └── ...
+├── 📁 dati/                      <-- Generato da script_external.py
+│   └── 📁 bandi_category/
+│       └── 📁 bandi/
+│           └── 📁 2025/
+│               └── 📄 2025-01-01_2025-01-31.json  <-- Indici mensili
+└── 📁 dettagli/                  <-- Generato da script_dettaglio.py
+    └── 📁 bandi_category/
+        └── 📁 bandi/
+            └── 📁 2025/
+                └── 📁 2025-01-01_2025-01-31/
+                    ├── 📄 1234567.json            <-- Scheda dettaglio singola
+                    └── 📄 id_falliti.txt          <-- ID non scaricati (es. 404 o timeout persistenti)
 ```
 
----
+## 🚀 Guida Operativa
 
-## 🎯 Stato di Avanzamento del Progetto
+Per completare un'acquisizione, gli script vanno eseguiti in ordine.
 
-Tutte le fasi di sviluppo sono state completate e integrate con successo. Lo script è pronto per l'uso in ambiente di produzione.
+### Step 1: Scarica gli Indici dei Bandi
+Scarica l'elenco dei bandi per il periodo desiderato. Lo script suddivide automaticamente il range in blocchi mensili.
 
-## 🟢 Fase 1 — Utility, Validazione e Gestione File
-
-Componenti isolati per la sicurezza dei dati e la robustezza del codice.
-
-### ✅ 1.1 Analisi e Validazione Date (`_analizza_data`)
-
-- Parsing sicuro delle stringhe di data.
-- Gestione delle eccezioni in caso di formato non conforme.
-
-### ✅ 1.2 Validazione dei Parametri di Input (`valida_parametri`)
-
-- Controllo di sicurezza sulla dimensione massima della pagina (tetto di sicurezza a **5000 record**).
-- Verifica della corretta sequenzialità temporale:
-  - la data di inizio non può essere successiva alla data di fine;
-  - la data finale non può trovarsi nel futuro.
-- Controllo dell'esistenza della categoria rispetto al dizionario di configurazione ANAC.
-
-### ✅ 1.3 Generatore Dinamico dei Periodi (`genera_periodi`)
-
-- Suddivisione del range temporale in blocchi mensili configurabili.
-- Gestione automatica dei confini dell'anno solare (es. termine al **31/12**).
-
-### ✅ 1.4 Generazione Percorsi Standardizzata (`costruisci_percorso`)
-
-- Implementazione tramite `pathlib.Path`.
-- Compatibilità cross-platform:
-  - Windows
-  - macOS
-  - Linux
-
-### ✅ 1.5 Scrittura Atomica e Sicura (`salva_file_json`)
-
-- Creazione automatica delle cartelle mancanti.
-- Salvataggio mediante file temporaneo (`.json.tmp`).
-- Sovrascrittura atomica del file finale per evitare corruzioni in caso di crash improvvisi.
-
----
-
-# 🟢 Fase 2 — Core Client & Logica di Rete (API ANAC)
-
-Integrazione con gli endpoint ministeriali e gestione proattiva degli errori di rete.
-
-### ✅ 2.1 Connessione Resiliente con Backoff Esponenziale (`chiamata_con_retry`)
-
-- Fino a **5 tentativi** automatici.
-- Gestione distinta degli errori:
-  - **HTTP 429** e **5xx** → nuovo tentativo con attesa raddoppiata.
-  - **HTTP 403** e **404** → interruzione immediata per evitare richieste inutili.
-
-### ✅ 2.2 Chiamata Sonda di Controllo (`ottieni_totale_elementi`)
-
-- Richiesta preliminare con `size=1`.
-- Recupero del valore `totalElements` per conoscere il numero esatto dei record disponibili.
-
-### ✅ 2.3 Calcolo Dinamico delle Pagine (`calcola_numero_pagine`)
-
-- Calcolo matematico del numero di richieste necessarie in funzione della dimensione della pagina.
-
-### ✅ 2.4 Scaricamento della Singola Pagina (`scarica_pagina`)
-
-- Download parametrizzato dei dati.
-- Gestione sicura di:
-  - header HTTP;
-  - parametri di paginazione;
-  - sessione.
-
----
-
-# 🟢 Fase 3 — Orchestrazione, CLI e Ciclo di Vita
-
-Il cuore dell'applicazione: coordinamento dei moduli in un flusso continuo ed efficiente.
-
-### ✅ 3.1 Interfaccia a Riga di Comando (`main` con `argparse`)
-
-Configurazione completa tramite terminale di:
-
-- intervallo temporale;
-- categoria;
-- granularità;
-- tempi di attesa;
-- dimensione delle pagine.
-
-### ✅ 3.2 Sistema di Caching Locale ("Smart Skip")
-
-- Riconoscimento automatico dei periodi già scaricati.
-- Ripresa dei download interrotti senza duplicare i dati.
-
-### ✅ 3.3 Isolamento dei Fallimenti dei Singoli Blocchi
-
-- Gli errori relativi a un singolo periodo vengono intercettati e registrati.
-- Lo script continua automaticamente con i periodi successivi.
-
-### ✅ 3.4 Algoritmo di Jittering Anti-Bot
-
-- Introduzione di una pausa casuale (`random.uniform`) al termine di ogni blocco.
-- Simulazione di un comportamento umano.
-- Riduzione del rischio di rate limiting o blocchi IP.
-
-### ✅ 3.5 Reportistica Finale
-
-Al termine dell'esecuzione viene mostrato un riepilogo contenente:
-
-- blocchi completati;
-- blocchi saltati;
-- blocchi falliti;
-- totale dei record salvati.
-
----
-
-# 🛠️ Guida Rapida all'Uso
-
-Lo script è completamente configurabile da riga di comando.
-
-## Parametri disponibili
+### Parametri disponibili
 
 | Parametro | Tipo | Default | Descrizione |
 |-----------|------|---------|-------------|
@@ -154,15 +67,75 @@ Lo script è completamente configurabile da riga di comando.
 | `--attesa-pagine` | `float` | `4.0` | Secondi di attesa tra le pagine dello stesso periodo |
 | `--attesa-periodi` | `float` | `7.0` | Attesa base prima del periodo successivo |
 
----
 
-## Esempio di utilizzo
+### Esempio di utilizzo
 
 ```bash
-python nome_script.py \
+python script_external.py \
   --data-inizio 01/01/2025 \
   --data-fine 31/12/2025 \
   --categoria bandi \
-  --granularita-mesi 1 \
-  --dimensione-pagina 1000
 ```
+
+### Step 2: Scarica i Dettagli delle Schede
+Una volta completato il primo script, avvia il secondo per scaricare i file di dettaglio di tutti gli ID trovati negli indici.
+
+| Parametro | Tipo | Default | Descrizione |
+|-----------|------|---------|-------------|
+| `--categoria` | `str` | **Richiesto** | Categoria ANAC da scaricare (es. `bandi`, `risultati`, `affidamenti_diretti_sotto_soglia`) |
+| `--attesa-chiamate` | `float` | `3.0` | Attesa base prima di passare allo scaricamento del id successvio |
+
+
+### Esempio di utilizzo
+
+```bash
+python script_dettaglio.py \
+  --categoria bandi \
+```
+
+## 🔧 Guida alla Manutenzione
+
+Se devi modificare, aggiornare o estendere questo codice, tieni a mente questi punti chiave:
+
+1. Come aggiungere una nuova categoria o aggiornare l'endpoint
+Le configurazioni dell'API ANAC sono centralizzate in `script_external.py`. Lo `script_dettaglio.py` le importa direttamente per evitare disallineamenti.
+
+- Endpoint Base: Modifica la costante `URL_API` se ANAC cambia l'indirizzo delle sue API.
+
+- Mappatura Categorie: Se ANAC introduce una nuova tipologia di bando o esito, aggiorna il dizionario `categorie`:
+
+```bash
+# script_external.py
+categorie = {
+    "bandi_category": {
+        "bandi": "4",
+        "avvisi_di_indizione": "2",
+        "nuova_sotto_categoria": "99"  # <-- Aggiungi qui (Chiave: ID_Scheda_ANAC)
+    },
+    # ...
+}
+```
+
+2. Gestione degli errori di rete e rate limiting
+Per evitare che l'IP venga bloccato o che lo script si blocchi a metà notte:
+
+- Backoff Esponenziale: La funzione `chiamata_con_retry` esegue fino a 1000 tentativi in caso di errori di rete o HTTP `429` (Too Many Requests) e `5xx`. Il tempo di attesa raddoppia ad ogni tentativo fallito.
+
+- Fast Failure: In caso di errore `403` (Forbidden) o `404` (Not Found), lo script si ferma immediatamente per quel blocco per evitare cicli infiniti di chiamate non autorizzate o inesistenti.
+
+- Jittering: Alla fine di ogni periodo, lo script applica un delay casuale (`random.uniform(0, 1.5)`) per imitare un comportamento umano ed eludere i sistemi anti-bot.
+
+3. Sicurezza dei dati
+Entrambi gli script utilizzano una tecnica di scrittura atomica per evitare la corruzione dei file JSON in caso di interruzione improvvisa della corrente o arresto dello script:
+
+- I dati vengono scritti in un file temporaneo .json.tmp.
+
+- Solo se la scrittura si conclude con successo, il file viene rinominato (replace) nel percorso definitivo.
+
+- Se lo script si interrompe a metà, non troverai mai un file .json corrotto o parziale.
+
+## 🩹 Gestione dei Fallimenti
+
+Durante il download dei dettagli, se una scheda fallisce sistematicamente (es. dopo tutti i tentativi di retry), l'ID viene registrato nel file id_falliti.txt all'interno della cartella della categoria.
+
+- Cosa fare con gli ID falliti? Il file viene aggiornato in modalità append evitando duplicati. In futuro, è possibile creare uno script di recupero che legga direttamente questo file di testo per tentare un download mirato solo delle schede mancanti.
