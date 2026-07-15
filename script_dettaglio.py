@@ -133,13 +133,42 @@ def main():
 
     raccolta_id = raccogli_tutti_gli_id(macro_categoria, args.categoria)
 
+    lavoro_da_scaricare = []
+    totale_gia_presenti = 0
+
+    for percorso_lista, id_set in raccolta_id:
+        anno = percorso_lista.parent.name
+        periodo = percorso_lista.stem
+
+        id_mancanti = []
+
+        for id_avviso in id_set:
+            percorso_dettaglio = costruisci_percorso_dettaglio(
+                macro_categoria,
+                args.categoria,
+                anno,
+                periodo,
+                id_avviso,
+            )
+
+            if percorso_dettaglio.exists():
+                totale_gia_presenti += 1
+            else:
+                id_mancanti.append(id_avviso)
+
+        lavoro_da_scaricare.append((percorso_lista, len(id_set), id_mancanti))
+
     statistiche = {
-        "file_lista": len(raccolta_id),
-        "id_trovati": sum(len(id_set) for _, id_set in raccolta_id),
-        "scaricati": 0,
-        "saltati": 0,
-        "falliti": 0,
-    }
+    "file_lista": len(raccolta_id),
+    "id_trovati": sum(len(id_set) for _, id_set in raccolta_id),
+    "da_scaricare": sum(
+        len(id_mancanti)
+        for _, _, id_mancanti in lavoro_da_scaricare
+    ),
+    "scaricati": 0,
+    "saltati": totale_gia_presenti,
+    "falliti": 0,
+}
 
     print(f"[INFO] Categoria: {args.categoria}")
     print(f"[INFO] File lista trovati: {statistiche['file_lista']}")
@@ -147,18 +176,19 @@ def main():
 
     totale_id_processati = 0
 
-    for percorso_lista, id_set in raccolta_id:
+    for percorso_lista, totale_periodo, id_da_scaricare in lavoro_da_scaricare:
         anno = percorso_lista.parent.name
         periodo = percorso_lista.stem
+        gia_presenti_periodo = totale_periodo - len(id_da_scaricare)
 
-        print(f"\n[INFO] Elaboro periodo: {periodo} ({len(id_set)} ID)")
+        print(f"\n[INFO] Periodo {periodo}: {totale_periodo} totali, {gia_presenti_periodo} già presenti, {len(id_da_scaricare)} da scaricare")
 
-        for indice, id_avviso in enumerate(id_set, start=1):
+        for indice, id_avviso in enumerate(id_da_scaricare, start=1):
 
             totale_id_processati += 1
 
-            print(f"[{indice}/{len(id_set)} periodo | "
-            f"{totale_id_processati}/{statistiche['id_trovati']} totale] "
+            print(f"[{indice}/{len(id_da_scaricare)} da scaricare nel periodo "
+            f"{periodo} | {totale_id_processati}/{statistiche['da_scaricare']} totale] "
             f"ID: {id_avviso}")
 
             try:
@@ -169,11 +199,6 @@ def main():
                     periodo,
                     id_avviso,
                 )
-
-                if percorso_dettaglio.exists():
-                    print(f"  [SKIP] Dettaglio già presente: {id_avviso}")
-                    statistiche["saltati"] += 1
-                    continue
 
                 print(f"  [DOWNLOAD] ")
                 dettaglio = scarica_dettaglio(
