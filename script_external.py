@@ -1,4 +1,3 @@
-print("########## AVVIO SCRIPT ##########")
 import argparse
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
@@ -192,6 +191,7 @@ def salva_file_json(dati, percorso_file):
     percorso_temporaneo.replace(percorso_file)
 
 def main():
+    print("########## AVVIO SCRIPT ESTERNO ##########")
     # Dizionario con le chiavi di ogni categoria da scaricare
     categorie = {
     "bandi_category": {
