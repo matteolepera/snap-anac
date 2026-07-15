@@ -6,6 +6,8 @@ from script_external import (
     salva_file_json,
     headers_default,
     CARTELLA_DOCUMENTI,
+    categorie,
+    URL_API,
 )
 
 from script_external import chiamata_con_retry, salva_file_json, headers_default, CARTELLA_DOCUMENTI

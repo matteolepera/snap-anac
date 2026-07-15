@@ -22,6 +22,22 @@ headers_default = {
     "Origin": "https://pubblicitalegale.anticorruzione.it"
 }
 
+# Dizionario con le chiavi di ogni categoria da scaricare
+categorie = {
+    "bandi_category": {
+        "bandi": "4",
+        "avvisi_di_indizione": "2"
+    },
+    "esiti_category": {
+        "risultati": "7",
+        "affidamenti_diretti_sotto_soglia": "8a",
+        "preavvisi_di_aggiudicazione_diretta": "9"
+    }
+}
+
+# === CONFIGURAZIONE ENDPOINT ANAC ===
+URL_API = "https://pubblicitalegale.anticorruzione.it/api/v0/avvisi"
+
 
 # Funzione con_ sarebbe funzione privata
 def _analizza_data(data_str, nome_campo):
@@ -192,18 +208,6 @@ def salva_file_json(dati, percorso_file):
 
 def main():
     print("########## AVVIO SCRIPT ESTERNO ##########")
-    # Dizionario con le chiavi di ogni categoria da scaricare
-    categorie = {
-    "bandi_category": {
-        "bandi": "4",
-        "avvisi_di_indizione": "2"
-    },
-    "esiti_category": {
-        "risultati": "7",
-        "affidamenti_diretti_sotto_soglia": "8a",
-        "preavvisi_di_aggiudicazione_diretta": "9"
-    }
-  }
 
     # Argomenti da passare allo script
     parser = argparse.ArgumentParser(description="Script per il download")
@@ -228,9 +232,6 @@ def main():
         print(f"  - Range temporale totale: {data_inizio} -> {data_fine}\n")
         
         periodi = genera_periodi(data_inizio, data_fine, args.granularita_mesi)
-        
-        # === CONFIGURAZIONE ENDPOINT ANAC ===
-        URL_API = "https://pubblicitalegale.anticorruzione.it/api/v0/avvisi"
         
         # === CONTATORI PER IL RIEPILOGO FINALE ===
         statistiche = {
