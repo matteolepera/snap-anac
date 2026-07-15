@@ -210,7 +210,7 @@ def main():
     print("########## AVVIO SCRIPT ESTERNO ##########")
 
     # Argomenti da passare allo script
-    parser = argparse.ArgumentParser(description="Script per il download")
+    parser = argparse.ArgumentParser(description="Script per il download esterno")
     parser.add_argument("--data-inizio", type=str, required=True, help="Data inizio (gg/mm/aaaa)")
     parser.add_argument("--data-fine", type=str, required=True, help="Data fine (gg/mm/aaaa)")
     parser.add_argument("--categoria", type=str, required=True, help="Sotto-categoria da scaricare")
