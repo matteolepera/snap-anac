@@ -112,7 +112,7 @@ def costruisci_percorso(macro_categoria, sotto_categoria, data_inizio, data_fine
 
     return percorso
 
-def chiamata_con_retry(url, headers=None, params=None, max_tentativi=5, backoff_iniziale=2):
+def chiamata_con_retry(url, headers=None, params=None, max_tentativi=1000, backoff_iniziale=2):
     # Funzione che si occupa di fare una richiesta, se qualcosa va storto aspetta invece di far crashare tutto
     backoff = backoff_iniziale
     for tentativo in range(1, max_tentativi + 1):

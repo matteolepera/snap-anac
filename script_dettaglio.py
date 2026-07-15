@@ -43,3 +43,25 @@ def estrai_id_da_file(percorso_file):
         if isinstance(avviso, dict) and "idAvviso" in avviso
     }
 
+def raccogli_tutti_gli_id(macro_categoria, sotto_categoria): 
+
+    risultato = []
+
+    for percorso_file in trova_file_lista(macro_categoria, sotto_categoria):
+        id_del_file = estrai_id_da_file(percorso_file)
+        risultato.append((percorso_file, id_del_file))
+
+    return risultato
+
+if __name__ == "__main__":
+    risultati = raccogli_tutti_gli_id("bandi_category", "bandi")
+    
+    print(f"Trovati {len(risultati)} file di lista")
+    
+    for percorso_file, id_set in risultati:
+        anno = percorso_file.parent.name
+        periodo = percorso_file.stem
+        print(f"  {periodo} (anno {anno}): {len(id_set)} ID trovati")
+    
+    totale_id = sum(len(id_set) for _, id_set in risultati)
+    print(f"\nTotale ID complessivi (con eventuali duplicati tra file): {totale_id}")
