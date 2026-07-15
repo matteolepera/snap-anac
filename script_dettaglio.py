@@ -53,13 +53,7 @@ def raccogli_tutti_gli_id(macro_categoria, sotto_categoria):
 
     return risultato
 
-def costruisci_percorso_dettaglio(
-    macro_categoria,
-    sotto_categoria,
-    anno,
-    periodo,
-    id_avviso,
-):
+def costruisci_percorso_dettaglio(macro_categoria, sotto_categoria, anno, periodo, id_avviso):
     nome_file = f"{id_avviso}.json"
 
     return (
@@ -71,6 +65,16 @@ def costruisci_percorso_dettaglio(
         / periodo
         / nome_file
     )
+
+def scarica_dettaglio(url_base, id_avviso, headers):
+    # rstrip rimuove eventuali caratteri / solo alla fine della stringa, da destra.
+    url_dettaglio = f"{url_base.rstrip('/')}/{id_avviso}"
+
+    risposta = chiamata_con_retry(url_dettaglio, headers=headers)
+
+    return risposta.json() if risposta is not None else None
+
+
 
 if __name__ == "__main__":
     risultati = raccogli_tutti_gli_id("bandi_category", "bandi")
@@ -94,3 +98,16 @@ if __name__ == "__main__":
     percorso_dettaglio = costruisci_percorso_dettaglio("bandi_category", "bandi", anno, periodo, un_id)
 
     print(percorso_dettaglio)
+
+    url_base = "https://pubblicitalegale.anticorruzione.it/api/v0/avvisi"
+
+    risultati = raccogli_tutti_gli_id("bandi_category", "bandi")
+    percorso_lista, id_set = risultati[0]
+    un_id = next(iter(id_set))
+
+    dettaglio = scarica_dettaglio(url_base, un_id, headers_default)
+
+    if dettaglio is not None:
+        print(f"Scaricato con successo, chiavi principali: {list(dettaglio.keys())}")
+    else:
+        print("Scarico fallito")
