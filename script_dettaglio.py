@@ -103,20 +103,9 @@ def registra_id_fallito(id_avviso, macro_categoria, sotto_categoria):
 
 def main():
 
-    parser = argparse.ArgumentParser(
-        description="Script per il download dei dettagli"
-    )
-    parser.add_argument(
-        "--categoria",
-        required=True,
-        help="Sotto-categoria da elaborare, ad esempio: bandi",
-    )
-    parser.add_argument(
-        "--attesa-chiamate",
-        type=float,
-        default=2.0,
-        help="Secondi di attesa tra due chiamate dettaglio (default: 2)",
-    )
+    parser = argparse.ArgumentParser(description="Script per il download dei dettagli")
+    parser.add_argument("--categoria", required=True, help="Sotto-categoria da elaborare, ad esempio: bandi")
+    parser.add_argument("--attesa-chiamate", type=float, default=3.0, help="Secondi di attesa tra due chiamate dettaglio (default: 3)")
     args = parser.parse_args()
 
     if args.attesa_chiamate < 0:
@@ -156,13 +145,22 @@ def main():
     print(f"[INFO] File lista trovati: {statistiche['file_lista']}")
     print(f"[INFO] ID unici nei rispettivi periodi: {statistiche['id_trovati']}")
 
+    totale_id_processati = 0
+
     for percorso_lista, id_set in raccolta_id:
         anno = percorso_lista.parent.name
         periodo = percorso_lista.stem
 
         print(f"\n[INFO] Elaboro periodo: {periodo} ({len(id_set)} ID)")
 
-        for id_avviso in id_set:
+        for indice, id_avviso in enumerate(id_set, start=1):
+
+            totale_id_processati += 1
+
+            print(f"[{indice}/{len(id_set)} periodo | "
+            f"{totale_id_processati}/{statistiche['id_trovati']} totale] "
+            f"ID: {id_avviso}")
+
             try:
                 percorso_dettaglio = costruisci_percorso_dettaglio(
                     macro_categoria,
@@ -177,7 +175,7 @@ def main():
                     statistiche["saltati"] += 1
                     continue
 
-                print(f"  [DOWNLOAD] ID: {id_avviso}")
+                print(f"  [DOWNLOAD] ")
                 dettaglio = scarica_dettaglio(
                     URL_API,
                     id_avviso,
