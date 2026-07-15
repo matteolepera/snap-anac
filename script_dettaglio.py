@@ -74,6 +74,30 @@ def scarica_dettaglio(url_base, id_avviso, headers):
 
     return risposta.json() if risposta is not None else None
 
+def registra_id_fallito(id_avviso, macro_categoria, sotto_categoria):
+    percorso_log = (
+        CARTELLA_DOCUMENTI
+        / "dettagli"
+        / macro_categoria
+        / sotto_categoria
+        / "id_falliti.txt"
+    )
+
+    percorso_log.parent.mkdir(parents=True, exist_ok=True)
+
+    id_gia_registrati = set()
+
+    if percorso_log.exists():
+        with open(percorso_log, "r", encoding="utf-8") as file_log:
+            id_gia_registrati = {
+                riga.strip()
+                for riga in file_log
+                if riga.strip()
+            }
+
+    if str(id_avviso) not in id_gia_registrati:
+        with open(percorso_log, "a", encoding="utf-8") as file_log:
+            file_log.write(f"{id_avviso}\n")
 
 
 if __name__ == "__main__":
