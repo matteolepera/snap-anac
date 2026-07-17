@@ -105,7 +105,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="Script per il download dei dettagli")
     parser.add_argument("--categoria", required=True, help="Sotto-categoria da elaborare, ad esempio: bandi")
-    parser.add_argument("--attesa-chiamate", type=float, default=3.0, help="Secondi di attesa tra due chiamate dettaglio (default: 3)")
+    parser.add_argument("--attesa-chiamate", type=float, default=2.0, help="Secondi di attesa tra due chiamate dettaglio (default: 2.0)")
     args = parser.parse_args()
 
     if args.attesa_chiamate < 0:
