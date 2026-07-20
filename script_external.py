@@ -131,13 +131,17 @@ def costruisci_percorso(macro_categoria, sotto_categoria, data_inizio, data_fine
 def chiamata_con_retry(url, headers=None, params=None, max_tentativi=1000, backoff_iniziale=2):
     # Funzione che si occupa di fare una richiesta, se qualcosa va storto aspetta invece di far crashare tutto
     backoff = backoff_iniziale
+    ultimo_motivo = "errore_sconosciuto"
+    
     for tentativo in range(1, max_tentativi + 1):
         try:
             response = requests.get(url, headers=headers, params=params, timeout=15)
             
             # 1. CASO SUCCESSO: Tutto ok, restituisco la risposta
             if response.status_code == 200:
-                return response
+                return response, None
+
+            ultimo_motivo = f"http_{response.status_code}"    
             
             # 2. CASO ERRORI TEMPORANEI: Il server è pigro o congestionato, ha senso riprovare
             if response.status_code in [429, 500, 502, 503, 504]:
@@ -146,18 +150,19 @@ def chiamata_con_retry(url, headers=None, params=None, max_tentativi=1000, backo
             # 3. CASO ERRORI DEFINITIVI (403, 404, ecc.): Errore client o blocco. Fermiamo subito il ciclo!
             else:
                 print(f"    [ERRORE BLOCCANTE] HTTP {response.status_code} rilevato (Invalido o Negato). Inutile riprovare. Interrompo.")
-                return None
+                return None, ultimo_motivo
                 
-        except (requests.exceptions.RequestException, requests.exceptions.Timeout) as errore:
+        except requests.exceptions.RequestException as errore:
+            ultimo_motivo = "errore_rete"
             # Questo blocco ora scatterà SOLO per veri problemi di rete (timeout, DNS fallito, connessione persa)
             print(f"    [AVVISO] Errore di rete/Timeout al tentativo {tentativo}: {errore}. Pausa di {backoff}s...")
-        
+
         # Gestione del backoff esponenziale (eseguito solo per il Caso 2 o per eccezioni nel blocco except)
         if tentativo < max_tentativi:
             time.sleep(backoff)
             backoff *= 2
             
-    return None
+    return None, ultimo_motivo
 
 def ottieni_totale_elementi(url_base, id_categoria, data_inizio, data_fine, headers):
     # Funzione sonda per prelevare il totale degli elementi
@@ -168,7 +173,7 @@ def ottieni_totale_elementi(url_base, id_categoria, data_inizio, data_fine, head
         "size": 1,
         "codiceScheda": id_categoria
     }
-    risposta = chiamata_con_retry(url_base, headers=headers, params=params)
+    risposta, _  = chiamata_con_retry(url_base, headers=headers, params=params)
     # Validazione esplicita: controlla che l'oggetto non sia None (evita ambiguità su response.ok)
     if risposta is None:
         return None
@@ -191,9 +196,14 @@ def scarica_pagina(url_base, id_categoria, data_inizio, data_fine, pagina, dimen
         "size": dimensione_pagina,
         "codiceScheda": id_categoria
     }
-    risposta = chiamata_con_retry(url_base, headers=headers, params=params)
+    risposta, _ = chiamata_con_retry(url_base, headers=headers, params=params)
     # Ritorna il dizionario JSON solo se l'oggetto risposta esiste esplicitamente
-    return risposta.json() if risposta is not None else None
+    if risposta is None:
+        return None
+    try:
+        return risposta.json()
+    except ValueError:
+        return None
 
 def salva_file_json(dati, percorso_file):
     # Crea le cartelle necessarie e scrive i dati preservando i caratteri speciali
