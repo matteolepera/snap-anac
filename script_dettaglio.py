@@ -71,11 +71,17 @@ def scarica_dettaglio(url_base, id_avviso, headers):
     # rstrip rimuove eventuali caratteri / solo alla fine della stringa, da destra.
     url_dettaglio = f"{url_base.rstrip('/')}/{id_avviso}"
 
-    risposta = chiamata_con_retry(url_dettaglio, headers=headers)
+    risposta, motivo = chiamata_con_retry(url_dettaglio, headers=headers)
 
-    return risposta.json() if risposta is not None else None
+    if risposta is None:
+        return None, motivo
 
-def registra_id_fallito(id_avviso, macro_categoria, sotto_categoria):
+    try:
+        return risposta.json(), None
+    except ValueError:
+        return None, "json_non_valido"    
+
+def registra_id_fallito(id_avviso, macro_categoria, sotto_categoria, motivo):
     percorso_log = (
         CARTELLA_DOCUMENTI
         / "dettagli"
@@ -91,21 +97,21 @@ def registra_id_fallito(id_avviso, macro_categoria, sotto_categoria):
     if percorso_log.exists():
         with open(percorso_log, "r", encoding="utf-8") as file_log:
             id_gia_registrati = {
-                riga.strip()
+                riga.strip().split(";", 1)[0]
                 for riga in file_log
                 if riga.strip()
             }
 
     if str(id_avviso) not in id_gia_registrati:
         with open(percorso_log, "a", encoding="utf-8") as file_log:
-            file_log.write(f"{id_avviso}\n")
+            file_log.write(f"{id_avviso};{motivo}\n")
 
 
 def main():
 
     parser = argparse.ArgumentParser(description="Script per il download dei dettagli")
     parser.add_argument("--categoria", required=True, help="Sotto-categoria da elaborare, ad esempio: bandi")
-    parser.add_argument("--attesa-chiamate", type=float, default=2.0, help="Secondi di attesa tra due chiamate dettaglio (default: 2.0)")
+    parser.add_argument("--attesa-chiamate", type=float, default=1.6, help="Secondi di attesa tra due chiamate dettaglio (default: 2.0)")
     args = parser.parse_args()
 
     if args.attesa_chiamate < 0:
@@ -201,7 +207,7 @@ def main():
                 )
 
                 print(f"  [DOWNLOAD] ")
-                dettaglio = scarica_dettaglio(
+                dettaglio, motivo = scarica_dettaglio(
                     URL_API,
                     id_avviso,
                     headers_default,
@@ -209,7 +215,7 @@ def main():
 
                 if dettaglio is None:
                     print(f"  [ERRORE] Dettaglio non scaricato: {id_avviso}")
-                    registra_id_fallito(id_avviso, macro_categoria, args.categoria)
+                    registra_id_fallito(id_avviso, macro_categoria, args.categoria, motivo)
                     statistiche["falliti"] += 1
                 else:
                     salva_file_json(dettaglio, percorso_dettaglio)
@@ -219,7 +225,7 @@ def main():
 
             except Exception as errore_imprevisto:
                 print(f"  [CRASH EVITATO] Errore imprevisto su {id_avviso}: {errore_imprevisto}")
-                registra_id_fallito(id_avviso, macro_categoria, args.categoria)
+                registra_id_fallito(id_avviso, macro_categoria, args.categoria, "crash_imprevisto")
                 statistiche["falliti"] += 1
 
     print("\n" + "=" * 50)
