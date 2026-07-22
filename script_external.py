@@ -239,7 +239,44 @@ def scarica_pagina(url_base, id_categoria, data_inizio, data_fine, pagina, dimen
     if not isinstance(dati, dict):
         return None, "struttura_non_valida"
     
-    return None, "struttura_non_valida"
+    return dati, None
+
+def estrai_record_pagina(dati_pagina):
+    if not isinstance(dati_pagina, dict):
+        return None, "struttura_pagina_non_valida"
+    
+    if "content" not in dati_pagina:
+        return None, "content_mancante"
+    
+    lista_record = dati_pagina["content"]
+
+    if not isinstance(lista_record, list):
+        return None, "content_non_lista"
+    
+    record_non_validi = [
+        record
+        for record in lista_record
+        if(not isinstance(record, dict) or not record.get("idAvviso"))
+    ]
+
+    if record_non_validi:
+        return None, "record_non_validi"
+    
+    return lista_record, None
+
+def valida_periodo_raccolto(record_raccolti, totale_atteso):
+    if len(record_raccolti) != totale_atteso:
+        return False, "numero_record_incompleto"
+    
+    id_raccolti = [
+        record["idAvviso"]
+        for record in record_raccolti
+    ]
+
+    if len(id_raccolti) != len(set(id_raccolti)):
+        return False, "id_duplicati"
+    
+    return True, None
 
 def salva_file_json(dati, percorso_file):
     # Crea le cartelle necessarie e scrive i dati preservando i caratteri speciali
@@ -393,6 +430,7 @@ def main():
 
                 # 5. Ciclo di scaricamento pagine
                 for pagina in range(0, totale_pagine):
+
                     print(f"    Scarico pagina {pagina + 1}/{totale_pagine}...")
                     
                     dati_pagina, motivo = scarica_pagina(URL_API, id_categoria, p_inizio, p_fine, pagina, args.dimensione_pagina, headers_default)
@@ -402,18 +440,24 @@ def main():
                         errore_periodo = True
                         break
                     
-                    # Verifica esplicita che la struttura attesa sia presente, invece di un fallback silenzioso
-                    if not isinstance(dati_pagina, dict) or "content" not in dati_pagina:
-                        print(f"    [ERRORE STRUTTURA] La risposta non contiene la chiave 'content' attesa. Interrompo questo periodo.")
+                    lista_bandi, motivo = estrai_record_pagina(dati_pagina)
+
+                    if lista_bandi is None:
+                        print(f"    [ERRORE STRUTTURA] Pagina " f"{pagina + 1} non valida: {motivo}.")
                         errore_periodo = True
                         break
-
-                    lista_bandi = dati_pagina["content"]
                     bandi_del_periodo.extend(lista_bandi)
                     
                     
                     if pagina < (totale_pagine - 1):
                         time.sleep(args.attesa_pagine)
+
+                    if not errore_periodo:
+                        periodo_valido , motivo = valida_periodo_raccolto(bandi_del_periodo, totale_elementi)
+
+                    if not periodo_valido:
+                        print(f"    [ERRORE VALIDAZIONE] " f"Periodo non salvato: {motivo}.")
+                        errore_periodo = True
 
                 # 6. Salvataggio su disco
                 if not errore_periodo:
