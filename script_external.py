@@ -390,7 +390,14 @@ def registra_periodo_fallito(data_inizio, data_fine, macro_categoria, sotto_cate
     except OSError as errore_log:
         print(f"    [AVVISO LOG] Impossibile registrare " f"il fallimento: {errore_log}")
         return False
-    
+
+def attendi_prima_del_prossimo_periodo(attesa_periodi):
+
+    attesa_effettiva = attesa_periodi + random.uniform(0, 1.5)
+
+    print(f"    Attesa di {attesa_effettiva:.1f} secondi " f"prima del prossimo periodo...\n")
+
+    time.sleep(attesa_effettiva)
 
 def main():
     print("########## AVVIO SCRIPT ESTERNO ##########")
@@ -464,6 +471,7 @@ def main():
                     )
 
                     statistiche["falliti"] += 1
+                    attendi_prima_del_prossimo_periodo(args.attesa_periodi)
                     continue
                     
                 print(f"    Elementi totali rilevati sul server: {totale_elementi}")
@@ -473,6 +481,7 @@ def main():
                     print(f"    Nessun elemento presente. Creo file vuoto di spunta.")
                     salva_file_json([], percorso_file)
                     statistiche["completati"] += 1
+                    attendi_prima_del_prossimo_periodo(args.attesa_periodi)
                     continue
 
                 # 4. Calcolo delle pagine
@@ -549,8 +558,7 @@ def main():
                 else:
                     statistiche["falliti"] += 1
                 
-                print(f"    Attesa di assestamento prima del prossimo periodo...\n")
-                time.sleep(args.attesa_periodi + random.uniform(0, 1.5))
+                attendi_prima_del_prossimo_periodo(args.attesa_periodi)
             
             except OSError as errore_disco:
                 print(f"    [ERRORE FATALE DISCO] Impossibile salvare " f"il periodo " f"{p_inizio.strftime('%d/%m/%Y')} -> " f"{p_fine.strftime('%d/%m/%Y')}: " f"{errore_disco}")
@@ -571,6 +579,7 @@ def main():
                         )
                 
                 statistiche["falliti"] += 1
+                attendi_prima_del_prossimo_periodo(args.attesa_periodi)
                 continue
 
         # === FASE E: RIEPILOGO FINALE ===
