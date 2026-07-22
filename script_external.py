@@ -143,8 +143,17 @@ def costruisci_percorso(macro_categoria, sotto_categoria, data_inizio, data_fine
 
     return percorso
 
-def chiamata_con_retry(url, headers=None, params=None, max_tentativi=1000, backoff_iniziale=2):
+def chiamata_con_retry(url, headers=None, params=None, max_tentativi=1000, backoff_iniziale=2,  backoff_massimo=600):
     # Funzione che si occupa di fare una richiesta, se qualcosa va storto aspetta invece di far crashare tutto
+    if max_tentativi <= 0:
+        raise ValueError("max_tentativi deve essere maggiore di 0.")
+
+    if backoff_iniziale < 0:
+        raise ValueError("backoff_iniziale non può essere negativo.")
+
+    if backoff_massimo < backoff_iniziale:
+        raise ValueError("backoff_massimo non può essere inferiore a backoff_iniziale.")
+    
     backoff = backoff_iniziale
     ultimo_motivo = "errore_sconosciuto"
     
@@ -175,7 +184,7 @@ def chiamata_con_retry(url, headers=None, params=None, max_tentativi=1000, backo
         # Gestione del backoff esponenziale (eseguito solo per il Caso 2 o per eccezioni nel blocco except)
         if tentativo < max_tentativi:
             time.sleep(backoff)
-            backoff *= 2
+            backoff = min(backoff * 2, backoff_massimo)
             
     return None, ultimo_motivo
 
