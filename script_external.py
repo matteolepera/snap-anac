@@ -470,6 +470,10 @@ def main():
                 
                 print(f"    Attesa di assestamento prima del prossimo periodo...\n")
                 time.sleep(args.attesa_periodi + random.uniform(0, 1.5))
+            
+            except OSError as errore_disco:
+                print(f"    [ERRORE FATALE DISCO] Impossibile salvare " f"il periodo " f"{p_inizio.strftime('%d/%m/%Y')} -> " f"{p_fine.strftime('%d/%m/%Y')}: " f"{errore_disco}")
+                print("    Interrompo lo script per evitare di continuare " "a scaricare dati che non possono essere salvati.")
                 
             except Exception as errore_imprevisto:
                 # Lo scudo definitivo: cattura bug del codice, dischi pieni, JSON corrotti
