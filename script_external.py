@@ -94,10 +94,24 @@ def valida_parametri(data_inizio_str, data_fine_str, categoria_utente, struttura
 
     return data_inizio, data_fine, macro_categoria, id_categoria
 
+def valida_opzioni_download(granularita_mesi, attesa_pagine, attesa_periodi):
+    if not isinstance(granularita_mesi, int) or granularita_mesi <= 0:
+        raise ValueError("La granularità deve essere un numero intero maggiore di 0.")
+    
+    if attesa_pagine < 0:
+         raise ValueError("L'attesa tra le pagine non può essere negativa.")
+    
+    if attesa_periodi < 0:
+         raise ValueError("L'attesa tra i periodi non può essere negativa.")
+
 def genera_periodi(data_inizio, data_fine, granularita_mesi=1):
+    
+    if not isinstance(granularita_mesi, int) or granularita_mesi <= 0:
+        raise ValueError("La granularità deve essere un numero intero maggiore di 0.")
+
     periodi = []
     inizio_corrente = data_inizio
-    
+
     while inizio_corrente <= data_fine:
         # Aggiungiamo N mesi e togliamo un giorno per trovare la fine del blocco
         fine_teorica = inizio_corrente + relativedelta(months=granularita_mesi) - timedelta(days=1)
@@ -295,6 +309,8 @@ def main():
         data_inizio, data_fine, macro_categoria, id_categoria = valida_parametri(
             args.data_inizio, args.data_fine, args.categoria, categorie, args.dimensione_pagina
         )
+
+        valida_opzioni_download(args.granularita_mesi, args.attesa_pagine, args.attesa_periodi)
         
         print(f"\n[INFO] Configurazione avviata correttamente:")
         print(f"  - Sotto-categoria richiesta: '{args.categoria}' (ID API: {id_categoria})")
