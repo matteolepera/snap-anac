@@ -216,6 +216,66 @@ def salva_file_json(dati, percorso_file):
     
     percorso_temporaneo.replace(percorso_file)
 
+def controlla_file_lista(percorso_file):
+    if not percorso_file.exists():
+        return False, "file_mancante"
+    
+    try:
+        with open(percorso_file, "r", encoding="utf-8") as file:
+            dati = json.load(file)
+
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return False, "json_non_valido"
+    
+    except OSError:
+        return False, "errore_lettura_file"
+    
+    if not isinstance(dati, list):
+        return False, "struttura_non_valida"
+    
+    record_non_validi = [
+        avviso
+        for avviso in dati
+        if(not isinstance(avviso, dict) or not avviso.get("idAvviso"))
+    ]
+
+    if record_non_validi:
+        return False, "record_non_validi"
+    
+    return True, None
+
+def prepara_periodi_da_scaricare(periodi, macro_categoria, sotto_categoria):
+
+    periodi_da_scaricare = []
+    percorsi_gia_visti = set()
+
+    gia_presenti = 0
+    file_non_validi = 0
+
+    for data_inizio, data_fine in periodi:
+        percorso_file = costruisci_percorso(macro_categoria, sotto_categoria, data_inizio, data_fine)
+
+         # Protezione contro eventuali periodi duplicati
+        if percorso_file in percorsi_gia_visti:
+             print(f"[AVVISO] Periodo duplicato ignorato: "f"{percorso_file.name}")
+             continue
+        
+        percorsi_gia_visti.add(percorso_file)
+
+        file_valido, motivo = controlla_file_lista(percorso_file)
+
+        if file_valido:
+            gia_presenti += 1
+            continue
+
+        if motivo != "file_mancante":
+            file_non_validi += 1
+            print( f"[AVVISO] {percorso_file.name}: {motivo}. " f"Il periodo verrà riscaricato.")
+
+        periodi_da_scaricare.append((data_inizio, data_fine, percorso_file))
+
+    return (periodi_da_scaricare, gia_presenti, file_non_validi)
+
 def main():
     print("########## AVVIO SCRIPT ESTERNO ##########")
 
@@ -243,27 +303,31 @@ def main():
         
         periodi = genera_periodi(data_inizio, data_fine, args.granularita_mesi)
         
+        (periodi_da_scaricare, gia_presenti, file_non_validi) = prepara_periodi_da_scaricare(periodi, macro_categoria, args.categoria)
+        
+        
         # === CONTATORI PER IL RIEPILOGO FINALE ===
         statistiche = {
             "totale_periodi": len(periodi),
+            "gia_presenti": gia_presenti,
+            "file_non_validi": file_non_validi,
+            "da_scaricare": len(periodi_da_scaricare),
             "completati": 0,
-            "saltati": 0,
             "falliti": 0,
             "elementi_raccolti": 0
         }
         
-        print(f"--- Pianificazione Download ({statistiche['totale_periodi']} file previsti) ---")
+        print("--- Controllo preventivo completato ---")
+        print(f"  Periodi complessivi: " f"{statistiche['totale_periodi']}")
+        print(f"  File validi già presenti: " f"{statistiche['gia_presenti']}")
+        print(f"  File esistenti non validi: " f"{statistiche['file_non_validi']}")
+        print(f"  Periodi da scaricare: " f"{statistiche['da_scaricare']}")
+
+        print(f"\n--- Avvio download di " f"{statistiche['da_scaricare']} periodi ---")
         
-        for p_inizio, p_fine in periodi:
-            percorso_file = costruisci_percorso(macro_categoria, args.categoria, p_inizio, p_fine)
-            
+        for p_inizio, p_fine, percorso_file in periodi_da_scaricare:
             # Avvolgiamo il singolo periodo in un try/except dedicato per isolare i fallimenti
             try:
-                # 1. Controllo di esistenza (Skip)
-                if percorso_file.exists():
-                    print(f"[SKIP] Periodo {p_inizio.strftime('%d/%m/%Y')} -> {p_fine.strftime('%d/%m/%Y')} già scaricato.")
-                    statistiche["saltati"] += 1
-                    continue
                     
                 print(f"-> Analisi periodo: {p_inizio.strftime('%d/%m/%Y')} al {p_fine.strftime('%d/%m/%Y')}")
                 
@@ -337,10 +401,11 @@ def main():
         print("           ELABORAZIONE COMPLETATA")
         print("=" * 50)
         print(f" Periodi totali pianificati: {statistiche['totale_periodi']}")
-        print(f"   - Completati con successo: {statistiche['completati']}")
-        print(f"   - Saltati (già su disco):  {statistiche['saltati']}")
-        print(f"   - Falliti / Interrotti:    {statistiche['falliti']}")
-        print(f" Totale record ANAC raccolti: {statistiche['elementi_raccolti']}")
+        print(f"   - Già presenti e validi:  " f"{statistiche['gia_presenti']}")
+        print(f"   - File non validi rilevati: " f"{statistiche['file_non_validi']}")
+        print(f"   - Scaricati con successo: " f"{statistiche['completati']}")
+        print(f"   - Falliti / interrotti:   " f"{statistiche['falliti']}")
+        print(f" Totale record raccolti:     " f"{statistiche['elementi_raccolti']}")
         print("=" * 50)
             
     except ValueError as errore:
