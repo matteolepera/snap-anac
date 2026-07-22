@@ -33,6 +33,16 @@ categorie = {
         "risultati": "7",
         "affidamenti_diretti_sotto_soglia": "8a",
         "preavvisi_di_aggiudicazione_diretta": "9"
+    },
+    "altri_avvisi":{
+        "avvisi_di_pre_informazione_informativi": "1",
+        "sistemi_di_qualificazione": "3",
+        "indagini_di_mercato_pari_o_sopra_soglia": "5a",
+        "indagini_di_mercato_sotto_soglia": "5b",
+        "elenchi_operatori_economici": "6",
+        "affidamenti_in_house": "8b",
+        "modifiche_contrattuali": "10"
+
     }
 }
 
@@ -143,6 +153,22 @@ def costruisci_percorso(macro_categoria, sotto_categoria, data_inizio, data_fine
 
     return percorso
 
+def calcola_attesa_retry(response, backoff, backoff_massimo):
+    retry_after = response.headers.get("Retry-After")
+
+    if retry_after is None:
+        return backoff
+    
+    try:
+        secondi_retry_after = float(retry_after)
+    except (TypeError, ValueError):
+        return backoff
+    
+    if secondi_retry_after < 0:
+        return backoff
+    
+    return min(max(backoff, secondi_retry_after), backoff_massimo)
+
 def chiamata_con_retry(url, headers=None, params=None, max_tentativi=1000, backoff_iniziale=2,  backoff_massimo=600):
     # Funzione che si occupa di fare una richiesta, se qualcosa va storto aspetta invece di far crashare tutto
     if not isinstance(max_tentativi, int) or isinstance(max_tentativi, bool):
@@ -167,6 +193,7 @@ def chiamata_con_retry(url, headers=None, params=None, max_tentativi=1000, backo
     ultimo_motivo = "errore_sconosciuto"
     
     for tentativo in range(1, max_tentativi + 1):
+        attesa_retry = backoff
         try:
             response = SESSIONE_HTTP.get(url, headers=headers, params=params, timeout=15)
             
@@ -178,7 +205,13 @@ def chiamata_con_retry(url, headers=None, params=None, max_tentativi=1000, backo
             
             # 2. CASO ERRORI TEMPORANEI: Il server è pigro o congestionato, ha senso riprovare
             if response.status_code in [429, 500, 502, 503, 504]:
-                print(f"    [AVVISO] HTTP {response.status_code} al tentativo {tentativo}. Pausa di {backoff}s...")
+                attesa_retry = calcola_attesa_retry(
+                    response,
+                    backoff,
+                    backoff_massimo
+                )
+
+                print(f"    [AVVISO] HTTP {response.status_code} " f"al tentativo {tentativo}. " f"Pausa di {attesa_retry:.1f}s...")
             
             # 3. CASO ERRORI DEFINITIVI (403, 404, ecc.): Errore client o blocco. Fermiamo subito il ciclo!
             else:
@@ -192,7 +225,7 @@ def chiamata_con_retry(url, headers=None, params=None, max_tentativi=1000, backo
 
         # Gestione del backoff esponenziale (eseguito solo per il Caso 2 o per eccezioni nel blocco except)
         if tentativo < max_tentativi:
-            time.sleep(backoff)
+            time.sleep(attesa_retry)
             backoff = min(backoff * 2, backoff_massimo)
             
     return None, ultimo_motivo
