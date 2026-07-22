@@ -145,8 +145,17 @@ def costruisci_percorso(macro_categoria, sotto_categoria, data_inizio, data_fine
 
 def chiamata_con_retry(url, headers=None, params=None, max_tentativi=1000, backoff_iniziale=2,  backoff_massimo=600):
     # Funzione che si occupa di fare una richiesta, se qualcosa va storto aspetta invece di far crashare tutto
+    if not isinstance(max_tentativi, int) or isinstance(max_tentativi, bool):
+        raise TypeError("max_tentativi deve essere un numero intero.")
+    
     if max_tentativi <= 0:
         raise ValueError("max_tentativi deve essere maggiore di 0.")
+
+    if (not isinstance(backoff_iniziale, (int, float)) or isinstance(backoff_iniziale, bool)):
+        raise TypeError("backoff_iniziale deve essere un numero.")
+
+    if (not isinstance(backoff_massimo, (int, float)) or isinstance(backoff_massimo, bool)):
+        raise TypeError("backoff_massimo deve essere un numero.")
 
     if backoff_iniziale < 0:
         raise ValueError("backoff_iniziale non può essere negativo.")
