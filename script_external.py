@@ -6,6 +6,7 @@ import json
 import time
 import requests
 import random
+import csv
 
 
 FORMATO_DATA = "%d/%m/%Y"
@@ -349,6 +350,48 @@ def prepara_periodi_da_scaricare(periodi, macro_categoria, sotto_categoria):
 
     return (periodi_da_scaricare, gia_presenti, file_non_validi)
 
+def registra_periodo_fallito(data_inizio, data_fine, macro_categoria, sotto_categoria, motivo, pagina=None):
+    percorso_log = (
+        CARTELLA_DOCUMENTI
+        / "dati"
+        / macro_categoria
+        / sotto_categoria
+        / "periodi_falliti.csv")
+    try:
+        percorso_log.parent.mkdir(parents=True, exist_ok=True)
+
+        scrivi_intestazione = ( not percorso_log.exists() or percorso_log.stat().st_size == 0)
+        with open(percorso_log, "a", encoding="utf-8", newline="") as file_log:
+            scrittore = csv.writer(file_log, delimiter=";")
+            if scrivi_intestazione:
+                scrittore.writerow(
+                    [
+                        "data_inizio",
+                        "data_fine",
+                        "pagina",
+                        "motivo",
+                        "data_tentativo"
+                    ]
+                )
+
+            scrittore.writerow(
+                    [
+                        data_inizio.strftime("%Y-%m-%d"),
+                        data_fine.strftime("%Y-%m-%d"),
+                        pagina if pagina is not None else "",
+                        motivo,
+                        datetime.now()
+                        .astimezone()
+                        .isoformat(timespec="seconds"),
+                    ]
+                )
+            
+            return True
+    except OSError as errore_log:
+        print(f"    [AVVISO LOG] Impossibile registrare " f"il fallimento: {errore_log}")
+        return False
+    
+
 def main():
     print("########## AVVIO SCRIPT ESTERNO ##########")
 
@@ -411,6 +454,15 @@ def main():
                 
                 if totale_elementi is None:
                     print( f"    [ERRORE] Sonda fallita: {motivo}. " f"Salto il periodo.")
+
+                    registra_periodo_fallito(
+                        p_inizio,
+                        p_fine,
+                        macro_categoria,
+                        args.categoria,
+                        motivo
+                    )
+
                     statistiche["falliti"] += 1
                     continue
                     
@@ -437,6 +489,15 @@ def main():
                     
                     if dati_pagina is None:
                         print(  f"    [ERRORE GRAVE] Pagina {pagina + 1} " f"non scaricata: {motivo}.")
+                        
+                        registra_periodo_fallito(
+                            p_inizio,
+                            p_fine,
+                            macro_categoria,
+                            args.categoria,
+                            motivo
+                        )
+                        
                         errore_periodo = True
                         break
                     
@@ -457,6 +518,15 @@ def main():
 
                     if not periodo_valido:
                         print(f"    [ERRORE VALIDAZIONE] " f"Periodo non salvato: {motivo}.")
+                        
+                        registra_periodo_fallito(
+                            p_inizio,
+                            p_fine,
+                            macro_categoria,
+                            args.categoria,
+                            motivo
+                        )
+
                         errore_periodo = True
 
                 # 6. Salvataggio su disco
@@ -479,6 +549,15 @@ def main():
                 # Lo scudo definitivo: cattura bug del codice, dischi pieni, JSON corrotti
                 print(f"    [CRASH EVITATO] Errore imprevisto nel periodo {p_inizio.strftime('%d/%m/%Y')}: {errore_imprevisto}")
                 print(f"    Procedo comunque con il prossimo blocco temporale...\n")
+                
+                registra_periodo_fallito(
+                            p_inizio,
+                            p_fine,
+                            macro_categoria,
+                            args.categoria,
+                            motivo
+                        )
+                
                 statistiche["falliti"] += 1
                 continue
 
