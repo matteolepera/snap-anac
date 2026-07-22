@@ -105,7 +105,7 @@ def valida_opzioni_download(granularita_mesi, attesa_pagine, attesa_periodi):
          raise ValueError("L'attesa tra i periodi non può essere negativa.")
 
 def genera_periodi(data_inizio, data_fine, granularita_mesi=1):
-    
+
     if not isinstance(granularita_mesi, int) or granularita_mesi <= 0:
         raise ValueError("La granularità deve essere un numero intero maggiore di 0.")
 
@@ -187,15 +187,31 @@ def ottieni_totale_elementi(url_base, id_categoria, data_inizio, data_fine, head
         "size": 1,
         "codiceScheda": id_categoria
     }
-    risposta, _  = chiamata_con_retry(url_base, headers=headers, params=params)
-    # Validazione esplicita: controlla che l'oggetto non sia None (evita ambiguità su response.ok)
+    risposta, motivo = chiamata_con_retry(url_base, headers=headers, params=params)
+
     if risposta is None:
-        return None
+        return None, motivo
+    
     try:
-        # Adatta "totalElements" se l'API reale usa un'altra chiave nel JSON
-        return int(risposta.json().get("totalElements", 0))
-    except Exception:
-        return None
+        dati = risposta.json()
+    except ValueError:
+        return None, "json_non_valido"
+    
+    if not isinstance(dati, dict):
+        return None, "struttura_non_valida"
+    
+    if "totalElements" not in dati:
+        return None, "totalElements_mancante"
+    
+    try:
+        totale = int(dati["totalElements"])
+    except (TypeError, ValueError):
+        return None, "totalElements_non_valido"
+    
+    if totale < 0:
+        return None, "totalElements_negativo"
+    
+    return totale, None
 
 def calcola_numero_pagine(totale_elementi, dimensione_pagina):
     if totale_elementi <= 0:
@@ -210,14 +226,20 @@ def scarica_pagina(url_base, id_categoria, data_inizio, data_fine, pagina, dimen
         "size": dimensione_pagina,
         "codiceScheda": id_categoria
     }
-    risposta, _ = chiamata_con_retry(url_base, headers=headers, params=params)
+    risposta, motivo = chiamata_con_retry(url_base, headers=headers, params=params)
     # Ritorna il dizionario JSON solo se l'oggetto risposta esiste esplicitamente
     if risposta is None:
-        return None
+        return None, motivo
+    
     try:
-        return risposta.json()
+        dati = risposta.json()
     except ValueError:
-        return None
+        return None, "json_non_valido"
+    
+    if not isinstance(dati, dict):
+        return None, "struttura_non_valida"
+    
+    return None, "struttura_non_valida"
 
 def salva_file_json(dati, percorso_file):
     # Crea le cartelle necessarie e scrive i dati preservando i caratteri speciali
@@ -348,10 +370,10 @@ def main():
                 print(f"-> Analisi periodo: {p_inizio.strftime('%d/%m/%Y')} al {p_fine.strftime('%d/%m/%Y')}")
                 
                 # 2. Chiamata sonda
-                totale_elementi = ottieni_totale_elementi(URL_API, id_categoria, p_inizio, p_fine, headers_default)
+                totale_elementi, motivo = ottieni_totale_elementi(URL_API, id_categoria, p_inizio, p_fine, headers_default)
                 
                 if totale_elementi is None:
-                    print(f"    [ERRORE] Salto il periodo per fallimento della sonda di rete.")
+                    print( f"    [ERRORE] Sonda fallita: {motivo}. " f"Salto il periodo.")
                     statistiche["falliti"] += 1
                     continue
                     
@@ -373,10 +395,10 @@ def main():
                 for pagina in range(0, totale_pagine):
                     print(f"    Scarico pagina {pagina + 1}/{totale_pagine}...")
                     
-                    dati_pagina = scarica_pagina(URL_API, id_categoria, p_inizio, p_fine, pagina, args.dimensione_pagina, headers_default)
+                    dati_pagina, motivo = scarica_pagina(URL_API, id_categoria, p_inizio, p_fine, pagina, args.dimensione_pagina, headers_default)
                     
                     if dati_pagina is None:
-                        print(f"    [ERRORE GRAVE] Impossibile scaricare la pagina {pagina + 1}. Interrompo questo periodo.")
+                        print(  f"    [ERRORE GRAVE] Pagina {pagina + 1} " f"non scaricata: {motivo}.")
                         errore_periodo = True
                         break
                     
