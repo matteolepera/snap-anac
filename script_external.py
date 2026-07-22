@@ -260,6 +260,14 @@ def scarica_pagina(url_base, id_categoria, data_inizio, data_fine, pagina, dimen
     
     return dati, None
 
+def record_ha_id_valido(record):
+    if not isinstance(record, dict):
+        return False
+    
+    id_avviso = record.get("idAvviso")
+
+    return(isinstance(id_avviso, str) and bool(id_avviso.strip()))
+
 def estrai_record_pagina(dati_pagina):
     if not isinstance(dati_pagina, dict):
         return None, "struttura_pagina_non_valida"
@@ -272,13 +280,10 @@ def estrai_record_pagina(dati_pagina):
     if not isinstance(lista_record, list):
         return None, "content_non_lista"
     
-    record_non_validi = [
-        record
-        for record in lista_record
-        if(not isinstance(record, dict) or not record.get("idAvviso"))
-    ]
-
-    if record_non_validi:
+    if any(not record_ha_id_valido(record)
+    for record in lista_record
+    ):
+    
         return None, "record_non_validi"
     
     return lista_record, None
@@ -325,15 +330,20 @@ def controlla_file_lista(percorso_file):
     if not isinstance(dati, list):
         return False, "struttura_non_valida"
     
-    record_non_validi = [
-        avviso
+    if any(
+        not record_ha_id_valido(avviso)
         for avviso in dati
-        if(not isinstance(avviso, dict) or not avviso.get("idAvviso"))
-    ]
-
-    if record_non_validi:
+    ):
         return False, "record_non_validi"
     
+    id_raccolti = [
+        avviso["idAvviso"]
+        for avviso in dati
+    ]
+    
+    if len(id_raccolti) != len(set(id_raccolti)):
+        return False, "id_duplicati"
+
     return True, None
 
 def prepara_periodi_da_scaricare(periodi, macro_categoria, sotto_categoria):
