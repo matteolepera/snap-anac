@@ -38,7 +38,7 @@ categorie = {
 
 # === CONFIGURAZIONE ENDPOINT ANAC ===
 URL_API = "https://pubblicitalegale.anticorruzione.it/api/v0/avvisi"
-
+SESSIONE_HTTP = requests.Session()
 
 # Funzione con_ sarebbe funzione privata
 def _analizza_data(data_str, nome_campo):
@@ -168,7 +168,7 @@ def chiamata_con_retry(url, headers=None, params=None, max_tentativi=1000, backo
     
     for tentativo in range(1, max_tentativi + 1):
         try:
-            response = requests.get(url, headers=headers, params=params, timeout=15)
+            response = SESSIONE_HTTP.get(url, headers=headers, params=params, timeout=15)
             
             # 1. CASO SUCCESSO: Tutto ok, restituisco la risposta
             if response.status_code == 200:
