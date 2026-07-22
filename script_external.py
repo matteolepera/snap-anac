@@ -495,7 +495,8 @@ def main():
                             p_fine,
                             macro_categoria,
                             args.categoria,
-                            motivo
+                            motivo,
+                            pagina=pagina + 1,
                         )
                         
                         errore_periodo = True
@@ -505,6 +506,16 @@ def main():
 
                     if lista_bandi is None:
                         print(f"    [ERRORE STRUTTURA] Pagina " f"{pagina + 1} non valida: {motivo}.")
+                        
+                        registra_periodo_fallito(
+                            p_inizio,
+                            p_fine,
+                            macro_categoria,
+                            args.categoria,
+                            motivo,
+                            pagina=pagina + 1,
+                        )
+                        
                         errore_periodo = True
                         break
                     bandi_del_periodo.extend(lista_bandi)
@@ -513,8 +524,8 @@ def main():
                     if pagina < (totale_pagine - 1):
                         time.sleep(args.attesa_pagine)
 
-                    if not errore_periodo:
-                        periodo_valido , motivo = valida_periodo_raccolto(bandi_del_periodo, totale_elementi)
+                if not errore_periodo:
+                    periodo_valido , motivo = valida_periodo_raccolto(bandi_del_periodo, totale_elementi)
 
                     if not periodo_valido:
                         print(f"    [ERRORE VALIDAZIONE] " f"Periodo non salvato: {motivo}.")
@@ -544,18 +555,19 @@ def main():
             except OSError as errore_disco:
                 print(f"    [ERRORE FATALE DISCO] Impossibile salvare " f"il periodo " f"{p_inizio.strftime('%d/%m/%Y')} -> " f"{p_fine.strftime('%d/%m/%Y')}: " f"{errore_disco}")
                 print("    Interrompo lo script per evitare di continuare " "a scaricare dati che non possono essere salvati.")
-                
+                return
+            
             except Exception as errore_imprevisto:
                 # Lo scudo definitivo: cattura bug del codice, dischi pieni, JSON corrotti
                 print(f"    [CRASH EVITATO] Errore imprevisto nel periodo {p_inizio.strftime('%d/%m/%Y')}: {errore_imprevisto}")
                 print(f"    Procedo comunque con il prossimo blocco temporale...\n")
-                
+
                 registra_periodo_fallito(
                             p_inizio,
                             p_fine,
                             macro_categoria,
                             args.categoria,
-                            motivo
+                            "crash_imprevisto"
                         )
                 
                 statistiche["falliti"] += 1
