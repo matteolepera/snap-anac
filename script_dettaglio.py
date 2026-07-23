@@ -142,22 +142,29 @@ def registra_id_fallito(id_avviso, macro_categoria, sotto_categoria, motivo):
         / "id_falliti.txt"
     )
 
-    percorso_log.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        percorso_log.parent.mkdir(parents=True, exist_ok=True)
 
-    id_gia_registrati = set()
+        id_gia_registrati = set()
 
-    if percorso_log.exists():
-        with open(percorso_log, "r", encoding="utf-8") as file_log:
-            id_gia_registrati = {
-                riga.strip().split(";", 1)[0]
-                for riga in file_log
-                if riga.strip()
-            }
+        if percorso_log.exists():
+            with open(percorso_log, "r", encoding="utf-8") as file_log:
+                id_gia_registrati = {
+                    riga.strip().split(";", 1)[0]
+                    for riga in file_log
+                    if riga.strip()
+                }
 
-    if str(id_avviso) not in id_gia_registrati:
-        with open(percorso_log, "a", encoding="utf-8") as file_log:
-            file_log.write(f"{id_avviso};{motivo}\n")
+        if str(id_avviso) not in id_gia_registrati:
+            with open(percorso_log, "a", encoding="utf-8") as file_log:
+                file_log.write(f"{id_avviso};{motivo}\n")
+        return True
+    
+    except(OSError, UnicodeError) as errore_log:
 
+        print(f"  [AVVISO LOG] Impossibile registrare " f"il fallimento di {id_avviso}: {errore_log}")
+
+        return False
 
 def main():
 
@@ -282,6 +289,15 @@ def main():
 
                 time.sleep(args.attesa_chiamate)
 
+            except OSError as errore_disco:
+                print(f"  [ERRORE FATALE DISCO] Impossibile salvare " f"il dettaglio {id_avviso}: {errore_disco}")
+                print( "  Interrompo lo script per evitare altri " "download che non possono essere salvati.")
+
+                registra_id_fallito(id_avviso, macro_categoria, args.categoria, "errore_disco")
+
+                statistiche["falliti"] += 1
+                return
+            
             except Exception as errore_imprevisto:
                 print(f"  [CRASH EVITATO] Errore imprevisto su {id_avviso}: {errore_imprevisto}")
                 registra_id_fallito(id_avviso, macro_categoria, args.categoria, "crash_imprevisto")
