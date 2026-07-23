@@ -111,7 +111,7 @@ def costruisci_percorso_dettaglio(macro_categoria, sotto_categoria, anno, period
         / nome_file
     )
 
-def valida_dati_dettaglio(dati):
+def valida_dati_dettaglio(dati, id_avviso_atteso=None):
 
     if not isinstance(dati, dict):
         return False, "struttura_non_valida"
@@ -119,9 +119,15 @@ def valida_dati_dettaglio(dati):
     if not dati:
         return False, "dettaglio_vuoto"
 
+    if (id_avviso_atteso is not None and "idAvviso" in dati):
+        id_avviso_ricevuto = dati["idAvviso"]
+
+        if (not isinstance(id_avviso_ricevuto, str) or id_avviso_ricevuto != id_avviso_atteso):
+            return False, "id_avviso_non_coerente"
+
     return True, None
 
-def controlla_file_dettaglio(percorso_file):
+def controlla_file_dettaglio(percorso_file, id_avviso_atteso):
 
     if not percorso_file.exists():
         return False, "file_mancante"
@@ -136,7 +142,7 @@ def controlla_file_dettaglio(percorso_file):
     except OSError:
         return False, "errore_lettura_file"
 
-    return valida_dati_dettaglio(dati)
+    return valida_dati_dettaglio(dati, id_avviso_atteso)
 
 def scarica_dettaglio(url_base, id_avviso, headers):
     # rstrip rimuove eventuali caratteri / solo alla fine della stringa, da destra.
@@ -152,7 +158,7 @@ def scarica_dettaglio(url_base, id_avviso, headers):
     except ValueError:
         return None, "json_non_valido"
     
-    dettaglio_valido, motivo = valida_dati_dettaglio(dati)
+    dettaglio_valido, motivo = valida_dati_dettaglio(dati, id_avviso)
 
     if not dettaglio_valido:
         return None, motivo
@@ -248,7 +254,8 @@ def main():
             )
 
             dettaglio_valido, motivo = controlla_file_dettaglio(
-                percorso_dettaglio
+                percorso_dettaglio,
+                id_avviso
             )
 
             if dettaglio_valido:
