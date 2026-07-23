@@ -13,8 +13,6 @@ from script_external import (
     record_ha_id_valido,
 )
 
-print("########## AVVIO SCRIPT DETTAGLIO ##########")
-
 def trova_file_lista(macro_categoria, sotto_categoria):
     # Costruisce il percorso della cartella dove cercare.
     cartella = (
@@ -63,15 +61,18 @@ def raccogli_tutti_gli_id(macro_categoria, sotto_categoria):
 
     risultato = []
 
+    file_ignorati = 0
+
     for percorso_file in trova_file_lista(macro_categoria, sotto_categoria):
         id_del_file, motivo = estrai_id_da_file(percorso_file)
 
         if id_del_file is None:
+            file_ignorati += 1
             print(f"[AVVISO] File lista ignorato: " f"{percorso_file.name} ({motivo})")
             continue
         risultato.append((percorso_file, id_del_file))
 
-    return risultato
+    return risultato, file_ignorati
 
 def costruisci_percorso_dettaglio(macro_categoria, sotto_categoria, anno, periodo, id_avviso):
     nome_file = f"{id_avviso}.json"
@@ -169,13 +170,15 @@ def registra_id_fallito(id_avviso, macro_categoria, sotto_categoria, motivo):
 
 def main():
 
+    print("########## AVVIO SCRIPT DETTAGLIO ##########")
+
     parser = argparse.ArgumentParser(description="Script per il download dei dettagli")
     parser.add_argument("--categoria", required=True, help="Sotto-categoria da elaborare, ad esempio: bandi")
     parser.add_argument("--attesa-chiamate", type=float, default=1.6, help="Secondi di attesa tra due chiamate dettaglio (default: 1.6)")
     args = parser.parse_args()
 
     if (not math.isfinite(args.attesa_chiamate) or args.attesa_chiamate < 0):
-        print("Errore: --attesa-chiamate deve essere" "un numero finito maggiore o uguale a 0.")
+        print("Errore: --attesa-chiamate deve essere un numero " "finito maggiore o uguale a 0.")
         return
 
     macro_categoria = None
@@ -197,8 +200,11 @@ def main():
         )
         return
 
-    raccolta_id = raccogli_tutti_gli_id(macro_categoria, args.categoria)
-
+    raccolta_id, file_lista_ignorati = raccogli_tutti_gli_id(macro_categoria, args.categoria)
+    if not raccolta_id:
+        print("[AVVISO] Nessun file lista valido trovato " "per la categoria richiesta.")
+        return
+    
     lavoro_da_scaricare = []
     totale_gia_presenti = 0
 
@@ -233,6 +239,7 @@ def main():
 
     statistiche = {
     "file_lista": len(raccolta_id),
+    "file_lista_ignorati": file_lista_ignorati,
     "id_trovati": sum(len(id_set) for _, id_set in raccolta_id),
     "da_scaricare": sum(
         len(id_mancanti)
@@ -244,7 +251,8 @@ def main():
 }
 
     print(f"[INFO] Categoria: {args.categoria}")
-    print(f"[INFO] File lista trovati: {statistiche['file_lista']}")
+    print(f"[INFO] File lista validi: " f"{statistiche['file_lista']}")
+    print(f"[INFO] File lista ignorati: " f"{statistiche['file_lista_ignorati']}")
     print(f"[INFO] ID unici nei rispettivi periodi: {statistiche['id_trovati']}")
 
     totale_id_processati = 0
@@ -310,6 +318,7 @@ def main():
     print("       DOWNLOAD DETTAGLI COMPLETATO")
     print("=" * 50)
     print(f"File lista elaborati:       {statistiche['file_lista']}")
+    print(f"File lista ignorati:        "f"{statistiche['file_lista_ignorati']}")
     print(f"ID trovati:                 {statistiche['id_trovati']}")
     print(f"Dettagli scaricati:         {statistiche['scaricati']}")
     print(f"Dettagli già presenti:      {statistiche['saltati']}")
