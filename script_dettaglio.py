@@ -85,6 +85,33 @@ def costruisci_percorso_dettaglio(macro_categoria, sotto_categoria, anno, period
         / nome_file
     )
 
+def valida_dati_dettaglio(dati):
+
+    if not isinstance(dati, dict):
+        return False, "struttura_non_valida"
+
+    if not dati:
+        return False, "dettaglio_vuoto"
+
+    return True, None
+
+def controlla_file_dettaglio(percorso_file):
+
+    if not percorso_file.exists():
+        return False, "file_mancante"
+
+    try:
+        with open(percorso_file, "r", encoding="utf-8") as file:
+            dati = json.load(file)
+
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return False, "json_non_valido"
+
+    except OSError:
+        return False, "errore_lettura_file"
+
+    return valida_dati_dettaglio(dati)
+
 def scarica_dettaglio(url_base, id_avviso, headers):
     # rstrip rimuove eventuali caratteri / solo alla fine della stringa, da destra.
     url_dettaglio = f"{url_base.rstrip('/')}/{id_avviso}"
@@ -95,9 +122,16 @@ def scarica_dettaglio(url_base, id_avviso, headers):
         return None, motivo
 
     try:
-        return risposta.json(), None
+        dati = risposta.json()
     except ValueError:
-        return None, "json_non_valido"    
+        return None, "json_non_valido"
+    
+    dettaglio_valido, motivo = valida_dati_dettaglio(dati)
+
+    if not dettaglio_valido:
+        return None, motivo
+
+    return dati, None
 
 def registra_id_fallito(id_avviso, macro_categoria, sotto_categoria, motivo):
     percorso_log = (
@@ -175,9 +209,16 @@ def main():
                 id_avviso,
             )
 
-            if percorso_dettaglio.exists():
+            dettaglio_valido, motivo = controlla_file_dettaglio(
+                percorso_dettaglio
+            )
+
+            if dettaglio_valido:
                 totale_gia_presenti += 1
             else:
+                if motivo != "file_mancante":
+                    print(f"[AVVISO] Dettaglio non valido: " f"{percorso_dettaglio.name} ({motivo}). " f"Verrà riscaricato.")
+
                 id_mancanti.append(id_avviso)
 
         lavoro_da_scaricare.append((percorso_lista, len(id_set), id_mancanti))
