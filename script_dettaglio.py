@@ -1,6 +1,7 @@
 import json
 import argparse
 import time
+import math
 
 from script_external import (
     chiamata_con_retry,
@@ -170,11 +171,11 @@ def main():
 
     parser = argparse.ArgumentParser(description="Script per il download dei dettagli")
     parser.add_argument("--categoria", required=True, help="Sotto-categoria da elaborare, ad esempio: bandi")
-    parser.add_argument("--attesa-chiamate", type=float, default=1.6, help="Secondi di attesa tra due chiamate dettaglio (default: 2.0)")
+    parser.add_argument("--attesa-chiamate", type=float, default=1.6, help="Secondi di attesa tra due chiamate dettaglio (default: 1.6)")
     args = parser.parse_args()
 
-    if args.attesa_chiamate < 0:
-        print("Errore: --attesa-chiamate non può essere negativa.")
+    if (not math.isfinite(args.attesa_chiamate) or args.attesa_chiamate < 0):
+        print("Errore: --attesa-chiamate deve essere" "un numero finito maggiore o uguale a 0.")
         return
 
     macro_categoria = None
@@ -302,6 +303,8 @@ def main():
                 print(f"  [CRASH EVITATO] Errore imprevisto su {id_avviso}: {errore_imprevisto}")
                 registra_id_fallito(id_avviso, macro_categoria, args.categoria, "crash_imprevisto")
                 statistiche["falliti"] += 1
+                time.sleep(args.attesa_chiamate)
+
 
     print("\n" + "=" * 50)
     print("       DOWNLOAD DETTAGLI COMPLETATO")
