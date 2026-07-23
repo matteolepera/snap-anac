@@ -9,6 +9,7 @@ from script_external import (
     CARTELLA_DOCUMENTI,
     categorie,
     URL_API,
+    record_ha_id_valido,
 )
 
 print("########## AVVIO SCRIPT DETTAGLIO ##########")
@@ -30,26 +31,43 @@ def trova_file_lista(macro_categoria, sotto_categoria):
     return sorted(cartella.rglob("*.json"))
 
 def estrai_id_da_file(percorso_file):
-    with open(percorso_file, "r", encoding="utf-8") as file:
-        #  legge il contenuto del file e lo converte da testo JSON a struttura dati Python.
-        lista_avvisi = json.load(file)
+    try:
+        with open(percorso_file, "r", encoding="utf-8") as file:
+         #  legge il contenuto del file e lo converte da testo JSON a struttura dati Python.
+            lista_avvisi = json.load(file)
 
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None, "json_non_valido"
+    
+    except OSError:
+        return None, "errore_lettura_file"
+    
+    if not isinstance(lista_avvisi, list):
+        return None, "struttura_non_valida"
+
+    if any(
+        not record_ha_id_valido(avviso)
+        for avviso in lista_avvisi
+    ):
+        return None, "record_non_validi"
     # Set comprehension
-    return {
+    id_avvisi =  {
         avviso["idAvviso"]
         for avviso in lista_avvisi
-        # Per ogni avviso, applica due controlli in sequenza
-        # isinstance(avviso, dict) verifica che avviso sia effettivamente un dizionario
-        # "idAvviso" in avviso verifica che quel dizionario contenga la chiave "idAvviso" 
-        if isinstance(avviso, dict) and "idAvviso" in avviso
     }
+
+    return id_avvisi, None
 
 def raccogli_tutti_gli_id(macro_categoria, sotto_categoria): 
 
     risultato = []
 
     for percorso_file in trova_file_lista(macro_categoria, sotto_categoria):
-        id_del_file = estrai_id_da_file(percorso_file)
+        id_del_file, motivo = estrai_id_da_file(percorso_file)
+
+        if id_del_file is None:
+            print(f"[AVVISO] File lista ignorato: " f"{percorso_file.name} ({motivo})")
+            continue
         risultato.append((percorso_file, id_del_file))
 
     return risultato
