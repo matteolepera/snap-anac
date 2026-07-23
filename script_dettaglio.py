@@ -2,6 +2,7 @@ import json
 import argparse
 import time
 import math
+import re
 
 from script_external import (
     chiamata_con_retry,
@@ -12,6 +13,19 @@ from script_external import (
     URL_API,
     record_ha_id_valido,
 )
+
+PATTERN_ID_AVVISO = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9_-]*$"
+)
+
+def id_avviso_sicuro(id_avviso):
+    if not isinstance(id_avviso, str):
+        return False
+
+    if len(id_avviso) > 240:
+        return False
+    
+    return PATTERN_ID_AVVISO.fullmatch(id_avviso) is not None
 
 def trova_file_lista(macro_categoria, sotto_categoria):
     # Costruisce il percorso della cartella dove cercare.
@@ -49,6 +63,13 @@ def estrai_id_da_file(percorso_file):
         for avviso in lista_avvisi
     ):
         return None, "record_non_validi"
+
+    if any(
+        not id_avviso_sicuro(avviso["idAvviso"])
+        for avviso in lista_avvisi
+    ):
+        return None, "id_avviso_non_sicuro"
+    
     # Set comprehension
     id_avvisi =  {
         avviso["idAvviso"]
@@ -75,6 +96,9 @@ def raccogli_tutti_gli_id(macro_categoria, sotto_categoria):
     return risultato, file_ignorati
 
 def costruisci_percorso_dettaglio(macro_categoria, sotto_categoria, anno, periodo, id_avviso):
+    if not id_avviso_sicuro(id_avviso):
+        raise ValueError(f"ID avviso non utilizzabile nel percorso: "f"{id_avviso!r}")
+
     nome_file = f"{id_avviso}.json"
 
     return (
