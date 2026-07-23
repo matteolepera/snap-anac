@@ -209,7 +209,7 @@ def main():
 
     if (not math.isfinite(args.attesa_chiamate) or args.attesa_chiamate < 0):
         print("Errore: --attesa-chiamate deve essere un numero " "finito maggiore o uguale a 0.")
-        return
+        return 2
 
     macro_categoria = None
 
@@ -228,15 +228,16 @@ def main():
             f"Errore: categoria '{args.categoria}' non valida. "
             f"Opzioni disponibili: {', '.join(opzioni)}"
         )
-        return
+        return 2
 
     raccolta_id, file_lista_ignorati = raccogli_tutti_gli_id(macro_categoria, args.categoria)
     if not raccolta_id:
         print("[AVVISO] Nessun file lista valido trovato " "per la categoria richiesta.")
-        return
+        return 1
     
     lavoro_da_scaricare = []
     totale_gia_presenti = 0
+    totale_dettagli_non_validi = 0
 
     for percorso_lista, id_set in raccolta_id:
         anno = percorso_lista.parent.name
@@ -262,6 +263,8 @@ def main():
                 totale_gia_presenti += 1
             else:
                 if motivo != "file_mancante":
+                    totale_dettagli_non_validi += 1
+
                     print(f"[AVVISO] Dettaglio non valido: " f"{percorso_dettaglio.name} ({motivo}). " f"Verrà riscaricato.")
 
                 id_mancanti.append(id_avviso)
@@ -271,6 +274,7 @@ def main():
     statistiche = {
     "file_lista": len(raccolta_id),
     "file_lista_ignorati": file_lista_ignorati,
+    "dettagli_non_validi": totale_dettagli_non_validi,
     "id_trovati": sum(len(id_set) for _, id_set in raccolta_id),
     "da_scaricare": sum(
         len(id_mancanti)
@@ -285,6 +289,10 @@ def main():
     print(f"[INFO] File lista validi: " f"{statistiche['file_lista']}")
     print(f"[INFO] File lista ignorati: " f"{statistiche['file_lista_ignorati']}")
     print(f"[INFO] ID unici nei rispettivi periodi: {statistiche['id_trovati']}")
+
+    print(f"[INFO] Dettagli già presenti e validi: " f"{statistiche['saltati']}")
+    print(f"[INFO] Dettagli esistenti non validi: " f"{statistiche['dettagli_non_validi']}")
+    print(f"[INFO] Dettagli da scaricare: " f"{statistiche['da_scaricare']}")
 
     totale_id_processati = 0
 
@@ -336,7 +344,7 @@ def main():
                 registra_id_fallito(id_avviso, macro_categoria, args.categoria, "errore_disco")
 
                 statistiche["falliti"] += 1
-                return
+                return 1
             
             except Exception as errore_imprevisto:
                 print(f"  [CRASH EVITATO] Errore imprevisto su {id_avviso}: {errore_imprevisto}")
@@ -344,17 +352,31 @@ def main():
                 statistiche["falliti"] += 1
                 time.sleep(args.attesa_chiamate)
 
+    elaborati_durante_esecuzione = (statistiche["scaricati"] + statistiche["falliti"])
+    esito_con_errori = (statistiche["falliti"] > 0 or statistiche["file_lista_ignorati"] > 0)
 
     print("\n" + "=" * 50)
-    print("       DOWNLOAD DETTAGLI COMPLETATO")
+    if esito_con_errori:
+        print("   DOWNLOAD DETTAGLI COMPLETATO CON ERRORI")
+    else:
+        print("       DOWNLOAD DETTAGLI COMPLETATO")
+    
     print("=" * 50)
-    print(f"File lista elaborati:       {statistiche['file_lista']}")
+    print(f"File lista elaborati:       "f"{statistiche['file_lista']}")
     print(f"File lista ignorati:        "f"{statistiche['file_lista_ignorati']}")
-    print(f"ID trovati:                 {statistiche['id_trovati']}")
-    print(f"Dettagli scaricati:         {statistiche['scaricati']}")
-    print(f"Dettagli già presenti:      {statistiche['saltati']}")
-    print(f"Dettagli falliti:           {statistiche['falliti']}")
+    print(f"ID trovati:                 "f"{statistiche['id_trovati']}")
+    print(f"Dettagli già presenti:        "f"{statistiche['saltati']}")
+    print(f"Dettagli esistenti invalidi:      "f"{statistiche['dettagli_non_validi']}")
+    print(f"Dettagli da scaricare:      "f"{statistiche['da_scaricare']}")
+    print(f"Dettagli elaborati ora:     "f"{elaborati_durante_esecuzione}")
+    print(f"Dettagli scaricati:           "f"{statistiche['scaricati']}")
+    print(f"Dettagli falliti:           "f"{statistiche['falliti']}")
     print("=" * 50)
 
+    if esito_con_errori:
+        return 1
+    
+    return 0
+
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
