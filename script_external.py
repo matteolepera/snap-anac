@@ -511,13 +511,13 @@ def main():
 
         print(f"\n--- Avvio download di " f"{statistiche['da_scaricare']} periodi ---")
         
-        for p_inizio, p_fine, percorso_file in periodi_da_scaricare:
+        for indice_periodo, (p_inizio, p_fine, percorso_file) in enumerate(periodi_da_scaricare, start=1):
             # Avvolgiamo il singolo periodo in un try/except dedicato per isolare i fallimenti
             try:
-                    
-                print(f"-> Analisi periodo: {p_inizio.strftime('%d/%m/%Y')} al {p_fine.strftime('%d/%m/%Y')}")
+                print(f"\n[PERIODO "f"{indice_periodo}/"f"{statistiche['da_scaricare']}] "f"{p_inizio.strftime('%d/%m/%Y')} "f"→ {p_fine.strftime('%d/%m/%Y')}")
                 
                 # 2. Chiamata sonda
+                print("  [SONDA] Conteggio degli elementi in corso...")
                 totale_elementi, motivo = ottieni_totale_elementi(URL_API, id_categoria, p_inizio, p_fine, headers_default)
                 
                 if totale_elementi is None:
@@ -535,12 +535,14 @@ def main():
                     attendi_prima_del_prossimo_periodo(args.attesa_periodi)
                     continue
                     
-                print(f"    Elementi totali rilevati sul server: {totale_elementi}")
+                print(f"  [INFO] Elementi rilevati sul server: "f"{totale_elementi}")
                 
                 # 3. Gestione periodo vuoto
                 if totale_elementi == 0:
-                    print(f"    Nessun elemento presente. Creo file vuoto di spunta.")
                     salva_file_json([], percorso_file)
+
+                    print(f"  [OK PERIODO] Nessun elemento: "f"creato {percorso_file.name}")
+
                     statistiche["completati"] += 1
                     attendi_prima_del_prossimo_periodo(args.attesa_periodi)
                     continue
@@ -551,14 +553,18 @@ def main():
                 errore_periodo = False
 
                 # 5. Ciclo di scaricamento pagine
-                for pagina in range(0, totale_pagine):
+                for pagina in range(totale_pagine):
+                    numero_pagina = pagina + 1
 
-                    print(f"    Scarico pagina {pagina + 1}/{totale_pagine}...")
-                    
+                    print(f"  [DOWNLOAD] Pagina "f"{numero_pagina}/{totale_pagine} "f"in corso...")
+
+                    inizio_pagina = time.perf_counter()
+
                     dati_pagina, motivo = scarica_pagina(URL_API, id_categoria, p_inizio, p_fine, pagina, args.dimensione_pagina, headers_default)
                     
                     if dati_pagina is None:
-                        print(  f"    [ERRORE GRAVE] Pagina {pagina + 1} " f"non scaricata: {motivo}.")
+                        durata_pagina = (time.perf_counter() - inizio_pagina)
+                        print(f"  [ERRORE] Pagina "f"{numero_pagina}/{totale_pagine} "f"non scaricata dopo "f"{durata_pagina:.2f}s — "f"motivo: {motivo}")
                         
                         registra_periodo_fallito(
                             p_inizio,
@@ -566,7 +572,7 @@ def main():
                             macro_categoria,
                             args.categoria,
                             motivo,
-                            pagina=pagina + 1,
+                            pagina=numero_pagina,
                         )
                         
                         errore_periodo = True
@@ -575,7 +581,9 @@ def main():
                     lista_bandi, motivo = estrai_record_pagina(dati_pagina)
 
                     if lista_bandi is None:
-                        print(f"    [ERRORE STRUTTURA] Pagina " f"{pagina + 1} non valida: {motivo}.")
+                        durata_pagina = (time.perf_counter() - inizio_pagina)
+
+                        print(f"  [ERRORE] Struttura non valida nella "f"pagina {numero_pagina}/{totale_pagine} "f"dopo {durata_pagina:.2f}s — "f"motivo: {motivo}")
                         
                         registra_periodo_fallito(
                             p_inizio,
@@ -583,13 +591,17 @@ def main():
                             macro_categoria,
                             args.categoria,
                             motivo,
-                            pagina=pagina + 1,
+                            pagina=numero_pagina,
                         )
                         
                         errore_periodo = True
                         break
+
                     bandi_del_periodo.extend(lista_bandi)
-                    
+
+                    durata_pagina = (time.perf_counter() - inizio_pagina)
+
+                    print(f"  [OK] Pagina "f"{numero_pagina}/{totale_pagine}: "f"{len(lista_bandi)} record in "f"{durata_pagina:.2f}s "f"({len(bandi_del_periodo)}/"f"{totale_elementi} raccolti)")
                     
                     if pagina < (totale_pagine - 1):
                         time.sleep(args.attesa_pagine)
@@ -613,10 +625,11 @@ def main():
                 # 6. Salvataggio su disco
                 if not errore_periodo:
                     salva_file_json(bandi_del_periodo, percorso_file)
-                    print(f"    [OK] Blocco salvato con successo: {percorso_file.name}")
+                    print(f"  [OK PERIODO] "f"{len(bandi_del_periodo)} record salvati: "f"{percorso_file.name}")
                     statistiche["completati"] += 1
                     statistiche["elementi_raccolti"] += len(bandi_del_periodo)
                 else:
+                    print(f"  [PERIODO FALLITO] Nessun file salvato.")
                     statistiche["falliti"] += 1
                 
                 attendi_prima_del_prossimo_periodo(args.attesa_periodi)
