@@ -3,6 +3,7 @@ import argparse
 import time
 import math
 import re
+import stat
 
 from script_external import (
     chiamata_con_retry,
@@ -84,13 +85,21 @@ def raccogli_tutti_gli_id(macro_categoria, sotto_categoria):
 
     file_ignorati = 0
 
-    for percorso_file in trova_file_lista(macro_categoria, sotto_categoria):
-        id_del_file, motivo = estrai_id_da_file(percorso_file)
+    percorsi_file = trova_file_lista(macro_categoria, sotto_categoria)
 
+    totale_file = len(percorsi_file)
+
+    print(f"[INFO] File lista individuati: "f"{totale_file}")
+
+    for indice_file, percorso_file in enumerate(percorsi_file, start=1):
+        print(f"[LETTURA LISTE] "f"{indice_file}/{totale_file}: "f"{percorso_file.name}")
+
+        id_del_file, motivo = estrai_id_da_file(percorso_file)
         if id_del_file is None:
             file_ignorati += 1
-            print(f"[AVVISO] File lista ignorato: " f"{percorso_file.name} ({motivo})")
+            print(f"[AVVISO] File lista ignorato: "f"{percorso_file.name} ({motivo})")
             continue
+
         risultato.append((percorso_file, id_del_file))
 
     return risultato, file_ignorati
@@ -127,22 +136,23 @@ def valida_dati_dettaglio(dati, id_avviso_atteso=None):
 
     return True, None
 
-def controlla_file_dettaglio(percorso_file, id_avviso_atteso):
-
-    if not percorso_file.exists():
-        return False, "file_mancante"
-
+def controlla_file_dettaglio(percorso_file):
     try:
-        with open(percorso_file, "r", encoding="utf-8") as file:
-            dati = json.load(file)
+        informazioni_file = percorso_file.stat()
 
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        return False, "json_non_valido"
-
+    except FileNotFoundError:
+        return False, "file_mancante"
+    
     except OSError:
         return False, "errore_lettura_file"
 
-    return valida_dati_dettaglio(dati, id_avviso_atteso)
+    if not stat.S_ISREG(informazioni_file.st_mode):
+        return False, "percorso_non_file"
+
+    if informazioni_file.st_size == 0:
+        return False, "file_vuoto"
+
+    return True, None
 
 def scarica_dettaglio(url_base, id_avviso, headers):
     # rstrip rimuove eventuali caratteri / solo alla fine della stringa, da destra.
@@ -234,6 +244,9 @@ def main():
     if not raccolta_id:
         print("[AVVISO] Nessun file lista valido trovato " "per la categoria richiesta.")
         return 1
+    totale_id_da_controllare = sum(len(id_set) for _, id_set in raccolta_id)
+    totale_id_controllati = 0
+    print(f"[INFO] Avvio controllo rapido di "f"{totale_id_da_controllare} dettagli.")
     
     lavoro_da_scaricare = []
     totale_gia_presenti = 0
@@ -254,10 +267,7 @@ def main():
                 id_avviso,
             )
 
-            dettaglio_valido, motivo = controlla_file_dettaglio(
-                percorso_dettaglio,
-                id_avviso
-            )
+            dettaglio_valido, motivo = controlla_file_dettaglio(percorso_dettaglio)
 
             if dettaglio_valido:
                 totale_gia_presenti += 1
@@ -268,6 +278,12 @@ def main():
                     print(f"[AVVISO] Dettaglio non valido: " f"{percorso_dettaglio.name} ({motivo}). " f"Verrà riscaricato.")
 
                 id_mancanti.append(id_avviso)
+
+            totale_id_controllati += 1
+            
+            if(totale_id_controllati % 1000 == 0 or totale_id_controllati== totale_id_da_controllare):
+                percentuale = (totale_id_controllati / totale_id_da_controllare * 100)
+                print(f"[CONTROLLO] " f"{totale_id_controllati}/" f"{totale_id_da_controllare} dettagli " f"verificati ({percentuale:.1f}%)")
 
         lavoro_da_scaricare.append((percorso_lista, len(id_set), id_mancanti))
 
