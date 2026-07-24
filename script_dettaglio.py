@@ -280,7 +280,7 @@ def main():
                 id_mancanti.append(id_avviso)
 
             totale_id_controllati += 1
-            
+
             if(totale_id_controllati % 1000 == 0 or totale_id_controllati== totale_id_da_controllare):
                 percentuale = (totale_id_controllati / totale_id_da_controllare * 100)
                 print(f"[CONTROLLO] " f"{totale_id_controllati}/" f"{totale_id_da_controllare} dettagli " f"verificati ({percentuale:.1f}%)")
@@ -336,7 +336,10 @@ def main():
                     id_avviso,
                 )
 
-                print(f"  [DOWNLOAD] ")
+                print("  [DOWNLOAD] Richiesta in corso...")
+
+                inizio_operazione = time.perf_counter()
+
                 dettaglio, motivo = scarica_dettaglio(
                     URL_API,
                     id_avviso,
@@ -344,11 +347,17 @@ def main():
                 )
 
                 if dettaglio is None:
-                    print(f"  [ERRORE] Dettaglio non scaricato: {id_avviso}")
+                    durata_operazione = (time.perf_counter() - inizio_operazione)
+
+                    print(f"  [ERRORE] Download fallito dopo "f"{durata_operazione:.2f}s — "f"motivo: {motivo}")
                     registra_id_fallito(id_avviso, macro_categoria, args.categoria, motivo)
                     statistiche["falliti"] += 1
                 else:
                     salva_file_json(dettaglio, percorso_dettaglio)
+                    durata_operazione = (time.perf_counter() - inizio_operazione)
+
+                    print(f"  [OK] Dettaglio salvato in "f"{durata_operazione:.2f}s: "f"{percorso_dettaglio.name}")
+
                     statistiche["scaricati"] += 1
 
                 time.sleep(args.attesa_chiamate)
