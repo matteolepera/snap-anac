@@ -349,33 +349,30 @@ def salva_file_json(dati, percorso_file):
 def controlla_file_lista(percorso_file):
     if not percorso_file.exists():
         return False, "file_mancante"
+
+    if not percorso_file.is_file():
+        return False, "percorso_non_valido"
     
     try:
-        with open(percorso_file, "r", encoding="utf-8") as file:
-            dati = json.load(file)
+        dimensione_file = percorso_file.stat().st_size
 
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        return False, "json_non_valido"
+        if dimensione_file < 2:
+            return False, "file_vuoto_o_incompleto"
+
+        with open(percorso_file, "rb") as file:
+            primo_byte = file.read(1)
+
+            file.seek(-1, 2)
+            ultimo_byte = file.read(1)
     
     except OSError:
         return False, "errore_lettura_file"
-    
-    if not isinstance(dati, list):
-        return False, "struttura_non_valida"
-    
-    if any(
-        not record_ha_id_valido(avviso)
-        for avviso in dati
-    ):
-        return False, "record_non_validi"
-    
-    id_raccolti = [
-        avviso["idAvviso"]
-        for avviso in dati
-    ]
-    
-    if len(id_raccolti) != len(set(id_raccolti)):
-        return False, "id_duplicati"
+
+    if primo_byte != b"[":
+        return False, "struttura_iniziale_non_valida"
+
+    if ultimo_byte != b"]":
+        return False, "file_incompleto"
 
     return True, None
 
