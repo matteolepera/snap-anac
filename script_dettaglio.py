@@ -1,5 +1,4 @@
 import json
-import argparse
 import time
 import math
 import re
@@ -14,6 +13,7 @@ from script_external import (
     URL_API,
     record_ha_id_valido,
 )
+from terminal_ui import TerminalArgumentParser, console
 
 PATTERN_ID_AVVISO = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9_-]*$"
@@ -89,15 +89,23 @@ def raccogli_tutti_gli_id(macro_categoria, sotto_categoria):
 
     totale_file = len(percorsi_file)
 
-    print(f"[INFO] File lista individuati: "f"{totale_file}")
+    console.info(f"File indice individuati: {totale_file}")
 
     for indice_file, percorso_file in enumerate(percorsi_file, start=1):
-        print(f"[LETTURA LISTE] "f"{indice_file}/{totale_file}: "f"{percorso_file.name}")
+        console.step(
+            indice_file,
+            totale_file,
+            "Lettura indice",
+            percorso_file.name,
+        )
 
         id_del_file, motivo = estrai_id_da_file(percorso_file)
         if id_del_file is None:
             file_ignorati += 1
-            print(f"[AVVISO] File lista ignorato: "f"{percorso_file.name} ({motivo})")
+            console.warning(
+                f"Indice ignorato: {percorso_file.name} · {motivo}",
+                indentazione=1,
+            )
             continue
 
         risultato.append((percorso_file, id_del_file))
@@ -204,21 +212,27 @@ def registra_id_fallito(id_avviso, macro_categoria, sotto_categoria, motivo):
     
     except(OSError, UnicodeError) as errore_log:
 
-        print(f"  [AVVISO LOG] Impossibile registrare " f"il fallimento di {id_avviso}: {errore_log}")
+        console.warning(
+            f"Impossibile registrare il fallimento di {id_avviso}: {errore_log}",
+            indentazione=1,
+        )
 
         return False
 
 def main():
 
-    print("########## AVVIO SCRIPT DETTAGLIO ##########")
+    console.banner("ANAC · DETTAGLI", "Acquisizione delle singole schede di gara")
 
-    parser = argparse.ArgumentParser(description="Script per il download dei dettagli")
+    parser = TerminalArgumentParser(description="Script per il download dei dettagli")
     parser.add_argument("--categoria", required=True, help="Sotto-categoria da elaborare, ad esempio: bandi")
     parser.add_argument("--attesa-chiamate", type=float, default=1.6, help="Secondi di attesa tra due chiamate dettaglio (default: 1.6)")
     args = parser.parse_args()
 
     if (not math.isfinite(args.attesa_chiamate) or args.attesa_chiamate < 0):
-        print("Errore: --attesa-chiamate deve essere un numero " "finito maggiore o uguale a 0.")
+        console.error(
+            "Parametro non valido · --attesa-chiamate deve essere un numero "
+            "finito maggiore o uguale a 0"
+        )
         return 2
 
     macro_categoria = None
@@ -234,19 +248,22 @@ def main():
             for sotto_categorie in categorie.values()
             for sotto_categoria in sotto_categorie
         ]
-        print(
-            f"Errore: categoria '{args.categoria}' non valida. "
-            f"Opzioni disponibili: {', '.join(opzioni)}"
+        console.error(
+            f"Categoria '{args.categoria}' non valida · "
+            f"opzioni: {', '.join(opzioni)}"
         )
         return 2
 
     raccolta_id, file_lista_ignorati = raccogli_tutti_gli_id(macro_categoria, args.categoria)
     if not raccolta_id:
-        print("[AVVISO] Nessun file lista valido trovato " "per la categoria richiesta.")
+        console.warning("Nessun file indice valido per la categoria richiesta")
         return 1
     totale_id_da_controllare = sum(len(id_set) for _, id_set in raccolta_id)
     totale_id_controllati = 0
-    print(f"[INFO] Avvio controllo rapido di "f"{totale_id_da_controllare} dettagli.")
+    console.section(
+        "Controllo preventivo",
+        f"{totale_id_da_controllare} dettagli da verificare",
+    )
     
     lavoro_da_scaricare = []
     totale_gia_presenti = 0
@@ -275,15 +292,21 @@ def main():
                 if motivo != "file_mancante":
                     totale_dettagli_non_validi += 1
 
-                    print(f"[AVVISO] Dettaglio non valido: " f"{percorso_dettaglio.name} ({motivo}). " f"Verrà riscaricato.")
+                    console.warning(
+                        f"Dettaglio non valido: {percorso_dettaglio.name} · "
+                        f"{motivo}; verrà riscaricato"
+                    )
 
                 id_mancanti.append(id_avviso)
 
             totale_id_controllati += 1
 
             if(totale_id_controllati % 1000 == 0 or totale_id_controllati== totale_id_da_controllare):
-                percentuale = (totale_id_controllati / totale_id_da_controllare * 100)
-                print(f"[CONTROLLO] " f"{totale_id_controllati}/" f"{totale_id_da_controllare} dettagli " f"verificati ({percentuale:.1f}%)")
+                console.progress(
+                    totale_id_controllati,
+                    totale_id_da_controllare,
+                    "Dettagli verificati",
+                )
 
         lavoro_da_scaricare.append((percorso_lista, len(id_set), id_mancanti))
 
@@ -301,14 +324,22 @@ def main():
     "falliti": 0,
 }
 
-    print(f"[INFO] Categoria: {args.categoria}")
-    print(f"[INFO] File lista validi: " f"{statistiche['file_lista']}")
-    print(f"[INFO] File lista ignorati: " f"{statistiche['file_lista_ignorati']}")
-    print(f"[INFO] ID unici nei rispettivi periodi: {statistiche['id_trovati']}")
+    console.section("Piano di lavoro", args.categoria)
+    console.metrics(
+        [
+            ("File indice validi", statistiche["file_lista"]),
+            ("File indice ignorati", statistiche["file_lista_ignorati"]),
+            ("ID trovati", statistiche["id_trovati"]),
+            ("Dettagli già presenti", statistiche["saltati"]),
+            ("Dettagli esistenti non validi", statistiche["dettagli_non_validi"]),
+            ("Dettagli da scaricare", statistiche["da_scaricare"]),
+        ]
+    )
 
-    print(f"[INFO] Dettagli già presenti e validi: " f"{statistiche['saltati']}")
-    print(f"[INFO] Dettagli esistenti non validi: " f"{statistiche['dettagli_non_validi']}")
-    print(f"[INFO] Dettagli da scaricare: " f"{statistiche['da_scaricare']}")
+    console.section(
+        "Download dettagli",
+        f"{statistiche['da_scaricare']} richieste in coda",
+    )
 
     totale_id_processati = 0
 
@@ -317,15 +348,26 @@ def main():
         periodo = percorso_lista.stem
         gia_presenti_periodo = totale_periodo - len(id_da_scaricare)
 
-        print(f"\n[INFO] Periodo {periodo}: {totale_periodo} totali, {gia_presenti_periodo} già presenti, {len(id_da_scaricare)} da scaricare")
+        console.section("Periodo", periodo)
+        console.metrics(
+            [
+                ("Dettagli totali", totale_periodo),
+                ("Già presenti", gia_presenti_periodo),
+                ("Da scaricare", len(id_da_scaricare)),
+            ],
+            indentazione=1,
+        )
 
         for indice, id_avviso in enumerate(id_da_scaricare, start=1):
 
             totale_id_processati += 1
 
-            print(f"[{indice}/{len(id_da_scaricare)} da scaricare nel periodo "
-            f"{periodo} | {totale_id_processati}/{statistiche['da_scaricare']} totale] "
-            f"ID: {id_avviso}")
+            console.step(
+                totale_id_processati,
+                statistiche["da_scaricare"],
+                f"ID {id_avviso}",
+                f"{indice}/{len(id_da_scaricare)} nel periodo",
+            )
 
             try:
                 percorso_dettaglio = costruisci_percorso_dettaglio(
@@ -336,7 +378,7 @@ def main():
                     id_avviso,
                 )
 
-                print("  [DOWNLOAD] Richiesta in corso...")
+                console.working("Richiesta dettaglio in corso", indentazione=1)
 
                 inizio_operazione = time.perf_counter()
 
@@ -349,22 +391,34 @@ def main():
                 if dettaglio is None:
                     durata_operazione = (time.perf_counter() - inizio_operazione)
 
-                    print(f"  [ERRORE] Download fallito dopo "f"{durata_operazione:.2f}s — "f"motivo: {motivo}")
+                    console.error(
+                        f"Download fallito in {durata_operazione:.2f}s · {motivo}",
+                        indentazione=1,
+                    )
                     registra_id_fallito(id_avviso, macro_categoria, args.categoria, motivo)
                     statistiche["falliti"] += 1
                 else:
                     salva_file_json(dettaglio, percorso_dettaglio)
                     durata_operazione = (time.perf_counter() - inizio_operazione)
 
-                    print(f"  [OK] Dettaglio salvato in "f"{durata_operazione:.2f}s: "f"{percorso_dettaglio.name}")
+                    console.success(
+                        f"Salvato {percorso_dettaglio.name} · {durata_operazione:.2f}s",
+                        indentazione=1,
+                    )
 
                     statistiche["scaricati"] += 1
 
                 time.sleep(args.attesa_chiamate)
 
             except OSError as errore_disco:
-                print(f"  [ERRORE FATALE DISCO] Impossibile salvare " f"il dettaglio {id_avviso}: {errore_disco}")
-                print( "  Interrompo lo script per evitare altri " "download che non possono essere salvati.")
+                console.fatal(
+                    f"Impossibile salvare il dettaglio {id_avviso}: {errore_disco}",
+                    indentazione=1,
+                )
+                console.info(
+                    "Esecuzione interrotta per proteggere l'integrità dei dati",
+                    indentazione=1,
+                )
 
                 registra_id_fallito(id_avviso, macro_categoria, args.categoria, "errore_disco")
 
@@ -372,7 +426,10 @@ def main():
                 return 1
             
             except Exception as errore_imprevisto:
-                print(f"  [CRASH EVITATO] Errore imprevisto su {id_avviso}: {errore_imprevisto}")
+                console.error(
+                    f"Errore imprevisto su {id_avviso}: {errore_imprevisto}",
+                    indentazione=1,
+                )
                 registra_id_fallito(id_avviso, macro_categoria, args.categoria, "crash_imprevisto")
                 statistiche["falliti"] += 1
                 time.sleep(args.attesa_chiamate)
@@ -380,23 +437,26 @@ def main():
     elaborati_durante_esecuzione = (statistiche["scaricati"] + statistiche["falliti"])
     esito_con_errori = (statistiche["falliti"] > 0 or statistiche["file_lista_ignorati"] > 0)
 
-    print("\n" + "=" * 50)
-    if esito_con_errori:
-        print("   DOWNLOAD DETTAGLI COMPLETATO CON ERRORI")
-    else:
-        print("       DOWNLOAD DETTAGLI COMPLETATO")
-    
-    print("=" * 50)
-    print(f"File lista elaborati:       "f"{statistiche['file_lista']}")
-    print(f"File lista ignorati:        "f"{statistiche['file_lista_ignorati']}")
-    print(f"ID trovati:                 "f"{statistiche['id_trovati']}")
-    print(f"Dettagli già presenti:        "f"{statistiche['saltati']}")
-    print(f"Dettagli esistenti invalidi:      "f"{statistiche['dettagli_non_validi']}")
-    print(f"Dettagli da scaricare:      "f"{statistiche['da_scaricare']}")
-    print(f"Dettagli elaborati ora:     "f"{elaborati_durante_esecuzione}")
-    print(f"Dettagli scaricati:           "f"{statistiche['scaricati']}")
-    print(f"Dettagli falliti:           "f"{statistiche['falliti']}")
-    print("=" * 50)
+    titolo = (
+        "Download dettagli completato con errori"
+        if esito_con_errori
+        else "Download dettagli completato"
+    )
+    console.summary(
+        titolo,
+        [
+            ("File indice elaborati", statistiche["file_lista"]),
+            ("File indice ignorati", statistiche["file_lista_ignorati"]),
+            ("ID trovati", statistiche["id_trovati"]),
+            ("Dettagli già presenti", statistiche["saltati"]),
+            ("Dettagli esistenti non validi", statistiche["dettagli_non_validi"]),
+            ("Dettagli da scaricare", statistiche["da_scaricare"]),
+            ("Dettagli elaborati ora", elaborati_durante_esecuzione),
+            ("Dettagli scaricati", statistiche["scaricati"]),
+            ("Dettagli falliti", statistiche["falliti"]),
+        ],
+        stato="warning" if esito_con_errori else "success",
+    )
 
     if esito_con_errori:
         return 1

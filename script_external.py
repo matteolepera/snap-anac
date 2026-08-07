@@ -1,12 +1,25 @@
-import argparse
 from datetime import datetime, date, timedelta
-from dateutil.relativedelta import relativedelta
 from pathlib import Path
 import json
 import time
-import requests
 import random
 import csv
+
+from terminal_ui import TerminalArgumentParser, console
+
+try:
+    import requests
+    from dateutil.relativedelta import relativedelta
+except ModuleNotFoundError as errore_dipendenza:
+    nome_pacchetto = {
+        "dateutil": "python-dateutil",
+        "requests": "requests",
+    }.get(errore_dipendenza.name, errore_dipendenza.name)
+    console.fatal(
+        f"Dipendenza mancante: {nome_pacchetto} · "
+        f"installa con 'pip install {nome_pacchetto}'"
+    )
+    raise SystemExit(1) from None
 
 
 FORMATO_DATA = "%d/%m/%Y"
@@ -211,17 +224,29 @@ def chiamata_con_retry(url, headers=None, params=None, max_tentativi=1000, backo
                     backoff_massimo
                 )
 
-                print(f"    [AVVISO] HTTP {response.status_code} " f"al tentativo {tentativo}. " f"Pausa di {attesa_retry:.1f}s...")
+                console.retry(
+                    f"HTTP {response.status_code} al tentativo {tentativo} · "
+                    f"nuovo tentativo tra {attesa_retry:.1f}s",
+                    indentazione=1,
+                )
             
             # 3. CASO ERRORI DEFINITIVI (403, 404, ecc.): Errore client o blocco. Fermiamo subito il ciclo!
             else:
-                print(f"    [ERRORE BLOCCANTE] HTTP {response.status_code} rilevato (Invalido o Negato). Inutile riprovare. Interrompo.")
+                console.error(
+                    f"HTTP {response.status_code} · richiesta non valida o non autorizzata; "
+                    "nessun nuovo tentativo",
+                    indentazione=1,
+                )
                 return None, ultimo_motivo
                 
         except requests.exceptions.RequestException as errore:
             ultimo_motivo = "errore_rete"
             # Questo blocco ora scatterà SOLO per veri problemi di rete (timeout, DNS fallito, connessione persa)
-            print(f"    [AVVISO] Errore di rete/Timeout al tentativo {tentativo}: {errore}. Pausa di {backoff}s...")
+            console.retry(
+                f"Errore di rete al tentativo {tentativo}: {errore} · "
+                f"nuovo tentativo tra {backoff:.1f}s",
+                indentazione=1,
+            )
 
         # Gestione del backoff esponenziale (eseguito solo per il Caso 2 o per eccezioni nel blocco except)
         if tentativo < max_tentativi:
@@ -389,7 +414,7 @@ def prepara_periodi_da_scaricare(periodi, macro_categoria, sotto_categoria):
 
          # Protezione contro eventuali periodi duplicati
         if percorso_file in percorsi_gia_visti:
-             print(f"[AVVISO] Periodo duplicato ignorato: "f"{percorso_file.name}")
+             console.skip(f"Periodo duplicato: {percorso_file.name}")
              continue
         
         percorsi_gia_visti.add(percorso_file)
@@ -402,7 +427,9 @@ def prepara_periodi_da_scaricare(periodi, macro_categoria, sotto_categoria):
 
         if motivo != "file_mancante":
             file_non_validi += 1
-            print( f"[AVVISO] {percorso_file.name}: {motivo}. " f"Il periodo verrà riscaricato.")
+            console.warning(
+                f"File non valido: {percorso_file.name} · {motivo}; verrà riscaricato"
+            )
 
         periodi_da_scaricare.append((data_inizio, data_fine, percorso_file))
 
@@ -446,22 +473,28 @@ def registra_periodo_fallito(data_inizio, data_fine, macro_categoria, sotto_cate
             
             return True
     except OSError as errore_log:
-        print(f"    [AVVISO LOG] Impossibile registrare " f"il fallimento: {errore_log}")
+        console.warning(
+            f"Impossibile aggiornare il registro dei fallimenti: {errore_log}",
+            indentazione=1,
+        )
         return False
 
 def attendi_prima_del_prossimo_periodo(attesa_periodi):
 
     attesa_effettiva = attesa_periodi + random.uniform(0, 1.5)
 
-    print(f"    Attesa di {attesa_effettiva:.1f} secondi " f"prima del prossimo periodo...\n")
+    console.wait(
+        f"Prossimo periodo tra {attesa_effettiva:.1f}s",
+        indentazione=1,
+    )
 
     time.sleep(attesa_effettiva)
 
 def main():
-    print("########## AVVIO SCRIPT ESTERNO ##########")
+    console.banner("ANAC · INDICI", "Acquisizione massiva degli indici di gara")
 
     # Argomenti da passare allo script
-    parser = argparse.ArgumentParser(description="Script per il download esterno")
+    parser = TerminalArgumentParser(description="Script per il download esterno")
     parser.add_argument("--data-inizio", type=str, required=True, help="Data inizio (gg/mm/aaaa)")
     parser.add_argument("--data-fine", type=str, required=True, help="Data fine (gg/mm/aaaa)")
     parser.add_argument("--categoria", type=str, required=True, help="Sotto-categoria da scaricare")
@@ -479,10 +512,17 @@ def main():
 
         valida_opzioni_download(args.granularita_mesi, args.attesa_pagine, args.attesa_periodi)
         
-        print(f"\n[INFO] Configurazione avviata correttamente:")
-        print(f"  - Sotto-categoria richiesta: '{args.categoria}' (ID API: {id_categoria})")
-        print(f"  - Salvataggio in: {CARTELLA_DOCUMENTI / 'dati' / macro_categoria / args.categoria}")
-        print(f"  - Range temporale totale: {data_inizio} -> {data_fine}\n")
+        console.section("Configurazione")
+        console.metrics(
+            [
+                ("Categoria", f"{args.categoria}  ·  API {id_categoria}"),
+                (
+                    "Destinazione",
+                    CARTELLA_DOCUMENTI / "dati" / macro_categoria / args.categoria,
+                ),
+                ("Intervallo", f"{data_inizio:%d/%m/%Y}  →  {data_fine:%d/%m/%Y}"),
+            ]
+        )
         
         periodi = genera_periodi(data_inizio, data_fine, args.granularita_mesi)
         
@@ -500,25 +540,40 @@ def main():
             "elementi_raccolti": 0
         }
         
-        print("--- Controllo preventivo completato ---")
-        print(f"  Periodi complessivi: " f"{statistiche['totale_periodi']}")
-        print(f"  File validi già presenti: " f"{statistiche['gia_presenti']}")
-        print(f"  File esistenti non validi: " f"{statistiche['file_non_validi']}")
-        print(f"  Periodi da scaricare: " f"{statistiche['da_scaricare']}")
+        console.section("Controllo preventivo", "completato")
+        console.metrics(
+            [
+                ("Periodi complessivi", statistiche["totale_periodi"]),
+                ("File validi già presenti", statistiche["gia_presenti"]),
+                ("File esistenti non validi", statistiche["file_non_validi"]),
+                ("Periodi da scaricare", statistiche["da_scaricare"]),
+            ]
+        )
 
-        print(f"\n--- Avvio download di " f"{statistiche['da_scaricare']} periodi ---")
+        console.section(
+            "Download indici",
+            f"{statistiche['da_scaricare']} periodi in coda",
+        )
         
         for indice_periodo, (p_inizio, p_fine, percorso_file) in enumerate(periodi_da_scaricare, start=1):
             # Avvolgiamo il singolo periodo in un try/except dedicato per isolare i fallimenti
             try:
-                print(f"\n[PERIODO "f"{indice_periodo}/"f"{statistiche['da_scaricare']}] "f"{p_inizio.strftime('%d/%m/%Y')} "f"→ {p_fine.strftime('%d/%m/%Y')}")
+                console.step(
+                    indice_periodo,
+                    statistiche["da_scaricare"],
+                    f"{p_inizio:%d/%m/%Y}  →  {p_fine:%d/%m/%Y}",
+                    percorso_file.name,
+                )
                 
                 # 2. Chiamata sonda
-                print("  [SONDA] Conteggio degli elementi in corso...")
+                console.working("Conteggio degli elementi sul server", indentazione=1)
                 totale_elementi, motivo = ottieni_totale_elementi(URL_API, id_categoria, p_inizio, p_fine, headers_default)
                 
                 if totale_elementi is None:
-                    print( f"    [ERRORE] Sonda fallita: {motivo}. " f"Salto il periodo.")
+                    console.error(
+                        f"Conteggio non riuscito · {motivo}; periodo saltato",
+                        indentazione=1,
+                    )
 
                     registra_periodo_fallito(
                         p_inizio,
@@ -532,13 +587,19 @@ def main():
                     attendi_prima_del_prossimo_periodo(args.attesa_periodi)
                     continue
                     
-                print(f"  [INFO] Elementi rilevati sul server: "f"{totale_elementi}")
+                console.info(
+                    f"Elementi rilevati sul server: {totale_elementi}",
+                    indentazione=1,
+                )
                 
                 # 3. Gestione periodo vuoto
                 if totale_elementi == 0:
                     salva_file_json([], percorso_file)
 
-                    print(f"  [OK PERIODO] Nessun elemento: "f"creato {percorso_file.name}")
+                    console.success(
+                        f"Periodo vuoto · creato {percorso_file.name}",
+                        indentazione=1,
+                    )
 
                     statistiche["completati"] += 1
                     attendi_prima_del_prossimo_periodo(args.attesa_periodi)
@@ -553,7 +614,10 @@ def main():
                 for pagina in range(totale_pagine):
                     numero_pagina = pagina + 1
 
-                    print(f"  [DOWNLOAD] Pagina "f"{numero_pagina}/{totale_pagine} "f"in corso...")
+                    console.working(
+                        f"Download pagina {numero_pagina}/{totale_pagine}",
+                        indentazione=1,
+                    )
 
                     inizio_pagina = time.perf_counter()
 
@@ -561,7 +625,11 @@ def main():
                     
                     if dati_pagina is None:
                         durata_pagina = (time.perf_counter() - inizio_pagina)
-                        print(f"  [ERRORE] Pagina "f"{numero_pagina}/{totale_pagine} "f"non scaricata dopo "f"{durata_pagina:.2f}s — "f"motivo: {motivo}")
+                        console.error(
+                            f"Pagina {numero_pagina}/{totale_pagine} non scaricata "
+                            f"in {durata_pagina:.2f}s · {motivo}",
+                            indentazione=1,
+                        )
                         
                         registra_periodo_fallito(
                             p_inizio,
@@ -580,7 +648,11 @@ def main():
                     if lista_bandi is None:
                         durata_pagina = (time.perf_counter() - inizio_pagina)
 
-                        print(f"  [ERRORE] Struttura non valida nella "f"pagina {numero_pagina}/{totale_pagine} "f"dopo {durata_pagina:.2f}s — "f"motivo: {motivo}")
+                        console.error(
+                            f"Pagina {numero_pagina}/{totale_pagine} non valida "
+                            f"dopo {durata_pagina:.2f}s · {motivo}",
+                            indentazione=1,
+                        )
                         
                         registra_periodo_fallito(
                             p_inizio,
@@ -598,7 +670,12 @@ def main():
 
                     durata_pagina = (time.perf_counter() - inizio_pagina)
 
-                    print(f"  [OK] Pagina "f"{numero_pagina}/{totale_pagine}: "f"{len(lista_bandi)} record in "f"{durata_pagina:.2f}s "f"({len(bandi_del_periodo)}/"f"{totale_elementi} raccolti)")
+                    console.progress(
+                        len(bandi_del_periodo),
+                        totale_elementi,
+                        f"Pagina {numero_pagina}/{totale_pagine} completata",
+                        f"+{len(lista_bandi)} record · {durata_pagina:.2f}s",
+                    )
                     
                     if pagina < (totale_pagine - 1):
                         time.sleep(args.attesa_pagine)
@@ -607,7 +684,10 @@ def main():
                     periodo_valido , motivo = valida_periodo_raccolto(bandi_del_periodo, totale_elementi)
 
                     if not periodo_valido:
-                        print(f"    [ERRORE VALIDAZIONE] " f"Periodo non salvato: {motivo}.")
+                        console.error(
+                            f"Validazione fallita · {motivo}; periodo non salvato",
+                            indentazione=1,
+                        )
                         
                         registra_periodo_fallito(
                             p_inizio,
@@ -622,24 +702,38 @@ def main():
                 # 6. Salvataggio su disco
                 if not errore_periodo:
                     salva_file_json(bandi_del_periodo, percorso_file)
-                    print(f"  [OK PERIODO] "f"{len(bandi_del_periodo)} record salvati: "f"{percorso_file.name}")
+                    console.success(
+                        f"{len(bandi_del_periodo)} record salvati · {percorso_file.name}",
+                        indentazione=1,
+                    )
                     statistiche["completati"] += 1
                     statistiche["elementi_raccolti"] += len(bandi_del_periodo)
                 else:
-                    print(f"  [PERIODO FALLITO] Nessun file salvato.")
+                    console.error("Periodo fallito · nessun file salvato", indentazione=1)
                     statistiche["falliti"] += 1
                 
                 attendi_prima_del_prossimo_periodo(args.attesa_periodi)
             
             except OSError as errore_disco:
-                print(f"    [ERRORE FATALE DISCO] Impossibile salvare " f"il periodo " f"{p_inizio.strftime('%d/%m/%Y')} -> " f"{p_fine.strftime('%d/%m/%Y')}: " f"{errore_disco}")
-                print("    Interrompo lo script per evitare di continuare " "a scaricare dati che non possono essere salvati.")
+                console.fatal(
+                    f"Impossibile salvare il periodo {p_inizio:%d/%m/%Y} → "
+                    f"{p_fine:%d/%m/%Y}: {errore_disco}",
+                    indentazione=1,
+                )
+                console.info(
+                    "Esecuzione interrotta per proteggere l'integrità dei dati",
+                    indentazione=1,
+                )
                 return
             
             except Exception as errore_imprevisto:
                 # Lo scudo definitivo: cattura bug del codice, dischi pieni, JSON corrotti
-                print(f"    [CRASH EVITATO] Errore imprevisto nel periodo {p_inizio.strftime('%d/%m/%Y')}: {errore_imprevisto}")
-                print(f"    Procedo comunque con il prossimo blocco temporale...\n")
+                console.error(
+                    f"Errore imprevisto nel periodo {p_inizio:%d/%m/%Y}: "
+                    f"{errore_imprevisto}",
+                    indentazione=1,
+                )
+                console.info("Il prossimo periodo verrà elaborato", indentazione=1)
 
                 registra_periodo_fallito(
                             p_inizio,
@@ -654,19 +748,27 @@ def main():
                 continue
 
         # === FASE E: RIEPILOGO FINALE ===
-        print("=" * 50)
-        print("           ELABORAZIONE COMPLETATA")
-        print("=" * 50)
-        print(f" Periodi totali pianificati: {statistiche['totale_periodi']}")
-        print(f"   - Già presenti e validi:  " f"{statistiche['gia_presenti']}")
-        print(f"   - File non validi rilevati: " f"{statistiche['file_non_validi']}")
-        print(f"   - Scaricati con successo: " f"{statistiche['completati']}")
-        print(f"   - Falliti / interrotti:   " f"{statistiche['falliti']}")
-        print(f" Totale record raccolti:     " f"{statistiche['elementi_raccolti']}")
-        print("=" * 50)
+        esito = "warning" if statistiche["falliti"] else "success"
+        titolo = (
+            "Elaborazione completata con errori"
+            if statistiche["falliti"]
+            else "Elaborazione completata"
+        )
+        console.summary(
+            titolo,
+            [
+                ("Periodi pianificati", statistiche["totale_periodi"]),
+                ("Già presenti e validi", statistiche["gia_presenti"]),
+                ("File non validi rilevati", statistiche["file_non_validi"]),
+                ("Scaricati con successo", statistiche["completati"]),
+                ("Falliti o interrotti", statistiche["falliti"]),
+                ("Record raccolti", statistiche["elementi_raccolti"]),
+            ],
+            stato=esito,
+        )
             
     except ValueError as errore:
-        print(f"Errore nei parametri iniziali: {errore}")
+        console.error(f"Parametri iniziali non validi · {errore}")
 
 # Controllo per far capire a python se questo file deve essere esguito immediatamente o deve importarsi in un altro script.
 if __name__ == "__main__":

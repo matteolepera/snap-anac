@@ -93,6 +93,18 @@ python script_dettaglio.py \
   --categoria bandi \
 ```
 
+## ✦ Output del terminale
+
+Entrambi i comandi condividono un'interfaccia terminale compatta con colori,
+stati riconoscibili, indicatori di avanzamento e riepiloghi allineati. Non sono
+richieste librerie aggiuntive: lo stile usa le sequenze ANSI già supportate dai
+terminali moderni.
+
+- I colori vengono disattivati automaticamente quando l'output è reindirizzato
+  a un file o quando il terminale non li supporta.
+- Imposta `NO_COLOR=1` per disattivare esplicitamente i colori.
+- Imposta `FORCE_COLOR=1` per mantenerli anche in un ambiente non interattivo.
+
 ## 🔧 Guida alla Manutenzione
 
 Se devi modificare, aggiornare o estendere questo codice, tieni a mente questi punti chiave:
